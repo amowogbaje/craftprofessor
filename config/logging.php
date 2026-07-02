@@ -72,6 +72,13 @@ return [
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
+        
+        'story_agent' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/story-agent.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
 
         'slack' => [
             'driver' => 'slack',
