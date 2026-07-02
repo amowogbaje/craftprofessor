@@ -95,6 +95,16 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
+            'model' => 'gemini-2.0-flash',
+            'options' => [
+                'safety_settings' => [
+                    'HATE_SPEECH' => 'BLOCK_NONE',
+                    'HARASSMENT' => 'BLOCK_NONE',
+                    'DANGEROUS_CONTENT' => 'BLOCK_NONE',
+                    'SEXUALLY_EXPLICIT' => 'BLOCK_NONE',
+                ],
+            ],
+            'image_model' => 'gemini-2.0-flash',
             'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
         ],
 

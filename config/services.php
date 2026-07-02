@@ -35,13 +35,6 @@ return [
         ],
     ],
 
-    'gemini' => [
-        'key' => env('GEMINI_API_KEY'),
-        // Verify these are still the live model ids before deploying —
-        // Gemini model names change. See https://ai.google.dev/gemini-api/docs/models
-        'text_model' => env('GEMINI_TEXT_MODEL', 'gemini-2.0-flash'),
-        'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'),
-    ],
 
     'pinterest' => [
         'access_token' => env('PINTEREST_ACCESS_TOKEN'),

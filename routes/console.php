@@ -21,10 +21,10 @@ Schedule::command('story:generate-images')
     ->withoutOverlapping();
 
 // Scheduler 4: exactly 2 Pinterest posts per day, at fixed times.
-Schedule::command('story:post-pinterest-pin')
-    ->dailyAt('10:00')
-    ->withoutOverlapping();
+// Schedule::command('story:post-pinterest-pin')
+//     ->dailyAt('10:00')
+//     ->withoutOverlapping();
 
-Schedule::command('story:post-pinterest-pin')
-    ->dailyAt('18:00')
-    ->withoutOverlapping();
+// Schedule::command('story:post-pinterest-pin')
+//     ->dailyAt('18:00')
+//     ->withoutOverlapping();
