@@ -8,6 +8,7 @@ use App\Models\Character;
 use App\Models\Story;
 use App\Models\StoryImagePrompt;
 use Illuminate\Support\Facades\Log;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -119,43 +120,41 @@ class ImageGeneratorService
             'name' => $character->name,
         ]);
 
-        try {
-            $image = $this->imageAgent->generatePortrait($character->image_prompt);
+        $maxRetries = 3;
+        $attempt = 0;
 
-            $path = $image->storePubliclyAs(
-                "character-images/{$character->story_id}/{$character->id}-" . Str::random(8) . '.png'
-            );
-            $url = Storage::disk('public')->url($path);
+        while ($attempt < $maxRetries) {
+            try {
+                $image = $this->imageAgent->generatePortrait($character->image_prompt);
 
-            $character->update([
-                'img_url' => $url,
-                'generated_at' => now(),
-                'last_generation_error' => null,
-            ]);
+                $path = $image->storePubliclyAs(
+                    "character-images/{$character->story_id}/{$character->id}-" . Str::random(8) . '.png'
+                );
+                $url = Storage::disk('public')->url($path);
 
-            Log::info('ImageGeneratorService: character image stored', [
-                'character_id' => $character->id,
-                'url' => $url,
-            ]);
+                $character->update([
+                    'img_url' => $url,
+                    'generated_at' => now(),
+                    'last_generation_error' => null,
+                ]);
 
-            return true;
-        } catch (\Throwable $e) {
-            Log::error('ImageGeneratorService::generateCharacterImage failed', [
-                'character_id' => $character->id,
-                'story_id' => $character->story_id,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => Str::limit($e->getTraceAsString(), 3000),
-            ]);
+                return true;
 
-            $character->update([
-                'last_generation_error' => Str::limit($e->getMessage(), 2000),
-                'generation_attempts' => $character->generation_attempts + 1,
-            ]);
-
-            return false;
+            } catch (RateLimitedException $e) {
+                $attempt++;
+                if ($attempt >= $maxRetries) break;
+                
+                // Exponential backoff: sleep 10, 20, then 40 seconds
+                sleep(pow(2, $attempt) * 5); 
+                Log::warning("Rate limited on character {$character->id}, retrying... Attempt {$attempt}");
+            } catch (\Throwable $e) {
+                break; // Exit loop for non-rate-limit errors
+            }
         }
+
+        // Error handling if exhausted retries or non-rate-limit error occurred
+        $this->handleFailure($character, $e ?? null);
+        return false;
     }
 
     public function generateImage(StoryImagePrompt $imagePrompt): bool
@@ -165,48 +164,55 @@ class ImageGeneratorService
             'story_id' => $imagePrompt->story_id,
         ]);
 
-        try {
-            $referenceImageUrls = $imagePrompt->mainCharacters()
-                ->pluck('img_url')
-                ->filter()
-                ->values()
-                ->all();
+        $maxRetries = 3;
+        $attempt = 0;
 
-            $image = $this->imageAgent->generateScene($imagePrompt->prompt, $referenceImageUrls);
+        while ($attempt < $maxRetries) {
+            try {
+                $referenceImageUrls = $imagePrompt->mainCharacters()
+                    ->pluck('img_url')
+                    ->filter()
+                    ->values()
+                    ->all();
 
-            $path = $image->storePubliclyAs(
-                "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . '.png'
-            );
-            $url = Storage::disk('public')->url($path);
+                $image = $this->imageAgent->generateScene($imagePrompt->prompt, $referenceImageUrls);
 
-            $imagePrompt->update([
-                'image_generated_url' => $url,
-                'generated_at' => now(),
-                'last_generation_error' => null,
-            ]);
+                $path = $image->storePubliclyAs(
+                    "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . '.png'
+                );
+                $url = Storage::disk('public')->url($path);
 
-            Log::info('ImageGeneratorService: scene image stored', [
-                'story_image_prompt_id' => $imagePrompt->id,
-                'url' => $url,
-            ]);
+                $imagePrompt->update([
+                    'image_generated_url' => $url,
+                    'generated_at' => now(),
+                    'last_generation_error' => null,
+                ]);
 
-            return true;
-        } catch (\Throwable $e) {
-            Log::error('ImageGeneratorService::generateImage failed', [
-                'story_image_prompt_id' => $imagePrompt->id,
-                'story_id' => $imagePrompt->story_id,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => Str::limit($e->getTraceAsString(), 3000),
-            ]);
+                return true;
 
-            $imagePrompt->update([
-                'last_generation_error' => Str::limit($e->getMessage(), 2000),
-                'generation_attempts' => $imagePrompt->generation_attempts + 1,
-            ]);
-
-            return false;
+            } catch (RateLimitedException $e) {
+                $attempt++;
+                if ($attempt >= $maxRetries) break;
+                
+                sleep(pow(2, $attempt) * 5);
+                Log::warning("Rate limited on prompt {$imagePrompt->id}, retrying... Attempt {$attempt}");
+            } catch (\Throwable $e) {
+                break;
+            }
         }
+
+        $this->handleFailure($imagePrompt, $e ?? null);
+        return false;
+    }
+
+    protected function handleFailure($model, ?\Throwable $e): void
+    {
+        $message = $e ? $e->getMessage() : 'Unknown error';
+        Log::error('ImageGeneratorService failed', ['error' => $message]);
+        
+        $model->update([
+            'last_generation_error' => Str::limit($message, 2000),
+            'generation_attempts' => $model->generation_attempts + 1,
+        ]);
     }
 }
