@@ -24,6 +24,7 @@ class ImageGeneratorAgent
     {
         return Image::of($imagePrompt)
             ->square()
+            ->withConfig(['response_modalities' => ['TEXT', 'IMAGE']])
             ->generate(provider: Lab::Gemini);
     }
 
