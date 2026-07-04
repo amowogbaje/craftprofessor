@@ -95,20 +95,20 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
-            'model' => 'gemini-2.0-flash',
+            'model' => 'gemini-2.5-flash', // Use 2.5 for text tasks
             'options' => [
                 'timeout' => 60,
                 'safety_settings' => [
-                    'HATE_SPEECH' => 'BLOCK_NONE',
-                    'HARASSMENT' => 'BLOCK_NONE',
-                    'DANGEROUS_CONTENT' => 'BLOCK_NONE',
-                    'SEXUALLY_EXPLICIT' => 'BLOCK_NONE',
+                    'HATE_SPEECH' => 'BLOCK_ONLY_HIGH',
+                    'HARASSMENT' => 'BLOCK_ONLY_HIGH',
+                    'DANGEROUS_CONTENT' => 'BLOCK_ONLY_HIGH',
+                    'SEXUALLY_EXPLICIT' => 'BLOCK_ONLY_HIGH',
                 ],
             ],
-            'image_model' => 'gemini-2.0-flash',
-            'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
+            'image_model' => 'gemini-2.5-flash-image', // Keep this, it is standard for now
+            'url' => 'https://generativelanguage.googleapis.com/v1beta/', // Note: Plan to move to a stable 'v1' URL if possible
         ],
-
+        
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
