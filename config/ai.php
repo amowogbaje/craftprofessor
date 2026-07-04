@@ -97,6 +97,7 @@ return [
             'key' => env('GEMINI_API_KEY'),
             'model' => 'gemini-2.0-flash',
             'options' => [
+                'timeout' => 60,
                 'safety_settings' => [
                     'HATE_SPEECH' => 'BLOCK_NONE',
                     'HARASSMENT' => 'BLOCK_NONE',
