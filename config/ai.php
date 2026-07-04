@@ -105,10 +105,10 @@ return [
                     'SEXUALLY_EXPLICIT' => 'BLOCK_ONLY_HIGH',
                 ],
             ],
-            'image_model' => 'gemini-2.5-flash-image', // Keep this, it is standard for now
-            'url' => 'https://generativelanguage.googleapis.com/v1beta/', // Note: Plan to move to a stable 'v1' URL if possible
+            'image_model' => 'gemini-2.5-flash', // Keep this, it is standard for now
+            'url' => 'https://generativelanguage.googleapis.com/v1/', // Note: Plan to move to a stable 'v1' URL if possible
         ],
-        
+
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),

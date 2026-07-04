@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 class GenerateStoryImages extends Command
 {
-    protected $signature = 'story:generate-images {--limit=3 : Max images to generate per day}';
+    protected $signature = 'story:generate-images {--limit=6 : Max images to generate per day}';
     protected $description = 'Generate up to N images per day, character portraits first.';
 
     public function handle(ImageGeneratorService $service): int
