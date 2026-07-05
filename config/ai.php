@@ -105,7 +105,7 @@ return [
                     'SEXUALLY_EXPLICIT' => 'BLOCK_ONLY_HIGH',
                 ],
             ],
-            'image_model' => 'gemini-2.5-flash', // Keep this, it is standard for now
+            'image_model' => 'imagen-3.0-generate-002', // Keep this, it is standard for now
             'url' => 'https://generativelanguage.googleapis.com/v1/', // Note: Plan to move to a stable 'v1' URL if possible
         ],
 

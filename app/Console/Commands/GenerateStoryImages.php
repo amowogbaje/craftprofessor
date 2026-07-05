@@ -35,6 +35,7 @@ class GenerateStoryImages extends Command
             Log::info('story:generate-images — daily cap reached', ['generated_today' => $generatedToday, 'limit' => $limit]);
             return self::SUCCESS;
         }
+        
 
         // Priority 1: any character with a portrait prompt but no image yet.
         $character = Character::awaitingPortrait()->oldest('id')->first();
@@ -48,6 +49,8 @@ class GenerateStoryImages extends Command
 
             return self::SUCCESS;
         }
+
+        sleep(10);
 
         // Priority 2: next scene prompt whose characters (if any) are all ready.
         $prompt = $this->nextReadyScenePrompt();

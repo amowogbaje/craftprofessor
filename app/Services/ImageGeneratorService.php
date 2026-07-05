@@ -197,6 +197,7 @@ class ImageGeneratorService
                 sleep(pow(2, $attempt) * 5);
                 Log::warning("Rate limited on prompt {$imagePrompt->id}, retrying... Attempt {$attempt}");
             } catch (\Throwable $e) {
+                Log::error("Unrecoverable AI Error: " . $e->getMessage());
                 break;
             }
         }
