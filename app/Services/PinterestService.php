@@ -81,4 +81,47 @@ class PinterestService
 
         return $pinId;
     }
+
+    private function postPinDirect(array $data): string
+    {
+        $response = Http::withToken($this->accessToken)
+            ->post("{$this->baseUrl}/pins", [
+                'board_id' => $this->boardId,
+                'title' => $data['title'],
+                'description' => $data['description'],
+                'link' => $data['link'],
+                'media_source' => [
+                    'source_type' => 'image_url',
+                    'url' => $data['url'],
+                ],
+            ]);
+
+        if ($response->failed()) {
+            throw new \RuntimeException("Pinterest API Error: {$response->body()}");
+        }
+
+        return $response->json('id');
+    }
+
+    public function postLocalImagePin(string $title, string $description, string $link, string $imagePath): string
+    {
+        // Ensure file exists
+        $fullPath = public_path($imagePath);
+        if (!file_exists($fullPath)) {
+            throw new \RuntimeException("File not found at: {$fullPath}");
+        }
+
+        // Note: Pinterest API requires a public URL for image_url.
+        // If your app is behind a firewall/localhost, this will fail.
+        // You must upload the file to S3/Cloud Storage and pass that URL, 
+        // or use ngrok to expose your local image.
+        $imageUrl = asset($imagePath); 
+
+        return $this->postPinDirect([
+            'title' => $title,
+            'description' => $description,
+            'link' => $link,
+            'url' => $imageUrl,
+        ]);
+    }
 }

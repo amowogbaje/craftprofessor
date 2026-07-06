@@ -106,7 +106,23 @@ return [
                 ],
             ],
             'image_model' => 'imagen-3.0-generate-002', // Keep this, it is standard for now
-            'url' => 'https://generativelanguage.googleapis.com/v1/', // Note: Plan to move to a stable 'v1' URL if possible
+            'url' => 'https://generativelanguage.googleapis.com/v1beta/', // Note: Plan to move to a stable 'v1' URL if possible
+        ],
+
+        'imagen' => [
+            'driver' => 'gemini', // The driver stays 'gemini' as it handles the logic
+            'key' => null, // The SDK will automatically look for the JSON file via GOOGLE_APPLICATION_CREDENTIALS
+            'model' => 'imagen-3.0-generate-002',
+            // Use the Vertex regional endpoint
+            'url' => 'https://us-central1-aiplatform.googleapis.com/v1/projects/' . env('GOOGLE_CLOUD_PROJECT_ID') . '/locations/us-central1/publishers/google/models/',
+        ],
+        'imagen-2' => [
+            'driver' => 'gemini',
+            'key' => env('GEMINI_API_KEY'), // Keep using your AIza... API Key
+            // Use a model that actually supports image generation in AI Studio
+            'model' => 'gemini-2.5-flash-image', 
+            // Use the standard AI Studio URL
+            'url' => 'https://generativelanguage.googleapis.com/v1beta/',
         ],
 
         'groq' => [

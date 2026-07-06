@@ -21,88 +21,55 @@ use Illuminate\Support\Facades\Log;
  */
 class GenerateStoryImages extends Command
 {
-    protected $signature = 'story:generate-images {--limit=6 : Max images to generate per day}';
-    protected $description = 'Generate up to N images per day, character portraits first.';
+    protected $signature = 'story:generate-images 
+        {--limit=25 : Max images to generate this run}
+        {--time-budget=50 : Max seconds this run should take}';
 
     public function handle(ImageGeneratorService $service): int
     {
+        $startedAt = microtime(true);
+        $timeBudget = (int) $this->option('time-budget');
         $limit = (int) $this->option('limit');
 
-        $generatedToday = $this->countGeneratedToday();
+        $costCap = config('images.daily_cost_cap_cents');
+        $spentToday = $this->costGeneratedTodayCents();
 
-        if ($generatedToday >= $limit) {
-            $this->info("Daily image cap reached ({$generatedToday}/{$limit}).");
-            Log::info('story:generate-images — daily cap reached', ['generated_today' => $generatedToday, 'limit' => $limit]);
-            return self::SUCCESS;
-        }
-        
-
-        // Priority 1: any character with a portrait prompt but no image yet.
-        $character = Character::awaitingPortrait()->oldest('id')->first();
-
-        if ($character) {
-            $this->info("Generating portrait for character #{$character->id} ({$character->name}) — today {$generatedToday}/{$limit}");
-            $ok = $service->generateCharacterImage($character);
-
-            $ok ? $this->info("Character #{$character->id}: portrait generated.")
-                : $this->error("Character #{$character->id}: portrait generation failed, will retry.");
-
+        if ($spentToday >= $costCap) {
+            $this->info("Daily cost cap reached ({$spentToday}/{$costCap} cents).");
             return self::SUCCESS;
         }
 
-        sleep(10);
+        $generated = 0;
 
-        // Priority 2: next scene prompt whose characters (if any) are all ready.
-        $prompt = $this->nextReadyScenePrompt();
+        while ($generated < $limit) {
+            if ((microtime(true) - $startedAt) > $timeBudget) {
+                $this->info("Time budget exhausted, stopping at {$generated} images.");
+                break;
+            }
 
-        if (!$prompt) {
-            $this->info('No portraits or ready scene prompts to generate right now.');
-            return self::SUCCESS;
+            if ($this->costGeneratedTodayCents() >= $costCap) {
+                $this->info('Cost cap hit mid-run, stopping.');
+                break;
+            }
+
+            $character = Character::awaitingPortrait()->oldest('id')->first();
+            if ($character) {
+                $service->generateCharacterImage($character);
+                $generated++;
+                continue;
+            }
+
+            $prompt = $this->nextReadyScenePrompt();
+            if (!$prompt) {
+                $this->info('Nothing left to generate right now.');
+                break;
+            }
+
+            $service->generateImage($prompt);
+            $generated++;
         }
 
-        $this->info("Generating scene image for prompt #{$prompt->id} — today {$generatedToday}/{$limit}");
-        $ok = $service->generateImage($prompt);
-
-        $ok ? $this->info("Prompt #{$prompt->id}: image generated.")
-            : $this->error("Prompt #{$prompt->id}: generation failed, will retry.");
-
+        $this->info("Run complete: {$generated} images generated.");
         return self::SUCCESS;
-    }
-
-    protected function countGeneratedToday(): int
-    {
-        $today = [Carbon::today(), Carbon::tomorrow()];
-
-        $characterCount = Character::whereNotNull('img_url')->whereBetween('generated_at', $today)->count();
-        $sceneCount = StoryImagePrompt::whereNotNull('image_generated_url')->whereBetween('generated_at', $today)->count();
-
-        return $characterCount + $sceneCount;
-    }
-
-    /**
-     * Scans pending scene prompts (oldest first) and returns the first one
-     * whose referenced characters all already have a generated img_url.
-     * Prompts whose characters aren't ready yet are skipped for this run —
-     * they'll naturally become eligible once their portraits finish.
-     */
-    protected function nextReadyScenePrompt(): ?StoryImagePrompt
-    {
-        $candidates = StoryImagePrompt::awaitingImage()->oldest('id')->limit(50)->get();
-
-        foreach ($candidates as $candidate) {
-            $ids = $candidate->main_character_ids ?? [];
-
-            if (empty($ids)) {
-                return $candidate;
-            }
-
-            $unready = Character::whereIn('id', $ids)->whereNull('img_url')->exists();
-
-            if (!$unready) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 }
