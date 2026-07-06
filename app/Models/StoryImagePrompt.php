@@ -58,4 +58,11 @@ class StoryImagePrompt extends Model
 
         return empty($ids) ? collect() : Character::whereIn('id', $ids)->get();
     }
+
+    public function characters()
+    {
+        // Assuming you store IDs in a JSON column called 'main_character_ids'
+        // This allows the query builder to look up characters by these IDs
+        return Character::whereIn('id', $this->main_character_ids ?? []);
+    }
 }

@@ -72,4 +72,37 @@ class GenerateStoryImages extends Command
         $this->info("Run complete: {$generated} images generated.");
         return self::SUCCESS;
     }
+
+    protected function costGeneratedTodayCents(): int
+    {
+        $today = [Carbon::today(), Carbon::tomorrow()];
+
+        $characterCount = Character::whereNotNull('img_url')->whereBetween('generated_at', $today)->count();
+        $sceneCount = StoryImagePrompt::whereNotNull('image_generated_url')->whereBetween('generated_at', $today)->count();
+
+        return $characterCount + $sceneCount;
+    }
+
+    /**
+     * Scans pending scene prompts (oldest first) and returns the first one
+     * whose referenced characters all already have a generated img_url.
+     * Prompts whose characters aren't ready yet are skipped for this run —
+     * they'll naturally become eligible once their portraits finish.
+     */
+    protected function nextReadyScenePrompt(): ?StoryImagePrompt
+    {
+        return StoryImagePrompt::query()
+            ->awaitingImage()
+            ->where(function ($query) {
+                // Include prompts with no characters
+                $query->whereNull('main_character_ids')
+                    ->orWhere('main_character_ids', '[]')
+                    // OR prompts where all referenced characters have an image
+                    ->orWhereDoesntHave('characters', function ($q) {
+                        $q->whereNull('img_url');
+                    });
+            })
+            ->oldest('id')
+            ->first();
+    }
 }
