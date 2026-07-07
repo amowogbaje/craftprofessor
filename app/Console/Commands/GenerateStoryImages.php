@@ -52,24 +52,31 @@ class GenerateStoryImages extends Command
                 break;
             }
 
+            $url = null;
             $character = Character::awaitingPortrait()->oldest('id')->first();
+            
             if ($character) {
-                $service->generateCharacterImage($character);
+                $url = $service->generateCharacterImage($character);
+                $type = 'Character';
+            } else {
+                $prompt = $this->nextReadyScenePrompt();
+                if (!$prompt) {
+                    break; // No more work to do, exit silently
+                }
+                $url = $service->generateImage($prompt);
+                $type = 'Scene';
+            }
+
+            if ($url) {
+                $this->info("Generated {$type} image: {$url}");
                 $generated++;
-                continue;
             }
-
-            $prompt = $this->nextReadyScenePrompt();
-            if (!$prompt) {
-                $this->info('Nothing left to generate right now.');
-                break;
-            }
-
-            $service->generateImage($prompt);
-            $generated++;
         }
 
-        $this->info("Run complete: {$generated} images generated.");
+        if ($generated > 0) {
+            $this->info("Run complete: {$generated} images generated.");
+        }
+        
         return self::SUCCESS;
     }
 

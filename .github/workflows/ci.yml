@@ -31,7 +31,7 @@ jobs:
           chmod 600 /tmp/private_key
           rsync -avz -e "ssh -i /tmp/private_key -o StrictHostKeyChecking=no -p $port" \
             --exclude='.env' --exclude='node_modules' --exclude='storage' ./ \
-            $username@$host:/home/$username/storytelling.amowogbaje.com
+            $username@$host:/home/$username/craftprofessor.amowogbaje.com
 
       - name: Run post-deploy commands on server
         uses: appleboy/ssh-action@v1.0.3
@@ -41,7 +41,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ vars.PORT }}
           script: |
-            cd /home/${{ vars.USERNAME }}/storytelling.amowogbaje.com
+            cd /home/${{ vars.USERNAME }}/craftprofessor.amowogbaje.com
             # composer install --no-dev --optimize-autoloader --no-scripts
             php artisan migrate --force
             # php artisan optimize:clear
