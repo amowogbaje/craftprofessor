@@ -14,7 +14,7 @@
     <header class="bg-white border-b">
         <nav class="max-w-6xl mx-auto p-6 flex justify-between items-center">
             <h1 class="text-2xl font-bold tracking-tight">
-                Storytelling<span class="text-blue-600">.amowogbaje</span>
+                CraftProfessor<span class="text-blue-600">.amowogbaje</span>
             </h1>
 
             <div class="space-x-4 text-sm font-semibold">
