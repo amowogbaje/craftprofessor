@@ -14,13 +14,30 @@ use Illuminate\Support\Str;
 
 class ImageGeneratorService
 {
-    public function __construct(protected ImageGeneratorAgent $imageAgent)
-    {
+    public function __construct(
+        protected ImageGeneratorAgent $imageAgent,
+        protected \App\Services\WalletService $wallet,
+        protected \App\Services\UsageLimitService $limits,
+    ) {
     }
 
     public function generatePromptsForStory(Story $story): void
     {
         Log::info('ImageGeneratorService: generating prompts for story', ['story_id' => $story->id]);
+
+        $user = $story->user;
+        $batchCost = (int) config('coins.costs.image_prompt') * 10; // schema always returns exactly 10 prompts
+
+        if ($user) {
+            if (!$this->wallet->canAfford($user, $batchCost)) {
+                Log::info('ImageGeneratorService: skipping prompt generation, insufficient coins', [
+                    'story_id' => $story->id, 'user_id' => $user->id, 'required' => $batchCost,
+                ]);
+                return;
+            }
+
+            $this->wallet->debit($user, $batchCost, 'image_prompt', $story);
+        }
 
         try {
             $story->imagePrompts()->delete();
@@ -83,8 +100,10 @@ class ImageGeneratorService
                     ->all();
 
                 StoryImagePrompt::create([
+                    'user_id' => $story->user_id,
                     'story_id' => $story->id,
                     'prompt' => $entry['prompt'],
+                    'prompt_coin_cost' => (int) config('coins.costs.image_prompt'),
                     'main_character_ids' => $characterIds,
                     'pinterest_title' => $entry['pinterest_title'] ?? null,
                     'pinterest_description' => $entry['pinterest_description'] ?? null,
@@ -100,6 +119,10 @@ class ImageGeneratorService
                 'prompt_count' => count($prompts),
             ]);
         } catch (\Throwable $e) {
+            if ($user) {
+                $this->wallet->refund($user, $batchCost, 'image_prompt', $story, ['error' => $e->getMessage()]);
+            }
+
             Log::error('ImageGeneratorService::generatePromptsForStory failed', [
                 'story_id' => $story->id,
                 'error' => $e->getMessage(),
@@ -114,6 +137,21 @@ class ImageGeneratorService
 
     public function generateCharacterImage(Character $character): bool
     {
+        $user = $character->story?->user ?? $character->series?->user;
+        $cost = (int) config('coins.costs.character_portrait');
+
+        if ($user) {
+            if (!$this->limits->canGenerateImage($user)) {
+                Log::info('ImageGeneratorService: daily/monthly image limit reached, skipping portrait', ['character_id' => $character->id, 'user_id' => $user->id]);
+                return false;
+            }
+            if (!$this->wallet->canAfford($user, $cost)) {
+                Log::info('ImageGeneratorService: insufficient coins, skipping portrait', ['character_id' => $character->id, 'user_id' => $user->id]);
+                return false;
+            }
+            $this->wallet->debit($user, $cost, 'character_portrait', $character);
+        }
+
         Log::info('ImageGeneratorService: generating character image', [
             'character_id' => $character->id,
             'story_id' => $character->story_id,
@@ -153,12 +191,30 @@ class ImageGeneratorService
         }
 
         // Error handling if exhausted retries or non-rate-limit error occurred
+        if ($user) {
+            $this->wallet->refund($user, $cost, 'character_portrait', $character, ['error' => ($e ?? null)?->getMessage()]);
+        }
         $this->handleFailure($character, $e ?? null);
         return false;
     }
 
     public function generateImage(StoryImagePrompt $imagePrompt): bool
     {
+        $user = $imagePrompt->user ?? $imagePrompt->story?->user;
+        $cost = (int) config('coins.costs.image_generation');
+
+        if ($user) {
+            if (!$this->limits->canGenerateImage($user)) {
+                Log::info('ImageGeneratorService: daily/monthly image limit reached, skipping scene', ['story_image_prompt_id' => $imagePrompt->id, 'user_id' => $user->id]);
+                return false;
+            }
+            if (!$this->wallet->canAfford($user, $cost)) {
+                Log::info('ImageGeneratorService: insufficient coins, skipping scene', ['story_image_prompt_id' => $imagePrompt->id, 'user_id' => $user->id]);
+                return false;
+            }
+            $this->wallet->debit($user, $cost, 'image_generation', $imagePrompt);
+        }
+
         Log::info('ImageGeneratorService: generating scene image', [
             'story_image_prompt_id' => $imagePrompt->id,
             'story_id' => $imagePrompt->story_id,
@@ -184,6 +240,7 @@ class ImageGeneratorService
 
                 $imagePrompt->update([
                     'image_generated_url' => $url,
+                    'image_coin_cost' => $cost,
                     'generated_at' => now(),
                     'last_generation_error' => null,
                 ]);
@@ -202,6 +259,9 @@ class ImageGeneratorService
             }
         }
 
+        if ($user) {
+            $this->wallet->refund($user, $cost, 'image_generation', $imagePrompt, ['error' => ($e ?? null)?->getMessage()]);
+        }
         $this->handleFailure($imagePrompt, $e ?? null);
         return false;
     }

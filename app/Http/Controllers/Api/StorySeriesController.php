@@ -38,6 +38,7 @@ class StorySeriesController extends Controller
                 $validated['links'],
                 $validated['title'] ?? null,
                 $validated['description'] ?? null,
+                $request->user(),
             );
         } catch (\Throwable $e) {
             Log::error('StorySeriesController: failed to create series', [

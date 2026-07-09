@@ -23,3 +23,9 @@ Schedule::command('story:generate-image-prompts')
 // Schedule::command('story:post-pinterest-pin')
 //     ->dailyAt('18:00')
 //     ->withoutOverlapping();
+
+// Scheduler 5: flip scheduled dashboard content (images/videos) to
+// published once their scheduled_at time arrives.
+Schedule::command('content:publish-due')
+    ->everyMinute()
+    ->withoutOverlapping();

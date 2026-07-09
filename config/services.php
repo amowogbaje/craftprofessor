@@ -41,4 +41,24 @@ return [
         'board_id' => env('PINTEREST_BOARD_ID'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+    ],
+
+    'flutterwave' => [
+        'public_key' => env('FLUTTERWAVE_PUBLIC_KEY'),
+        'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
+        'secret_hash' => env('FLUTTERWAVE_SECRET_HASH'), // set as "verif-hash" in the Flutterwave dashboard webhook config
+        'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://api.flutterwave.com/v3'),
+    ],
+
+    'termii' => [
+        // SMS OTP provider — swap for Twilio/other if preferred, see OtpService.
+        'key' => env('TERMII_API_KEY'),
+        'sender_id' => env('TERMII_SENDER_ID', 'AppOTP'),
+        'base_url' => env('TERMII_BASE_URL', 'https://api.ng.termii.com/api'),
+    ],
+
 ];

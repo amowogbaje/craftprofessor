@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Story;
 use App\Models\StorySeries;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -18,17 +19,19 @@ class StorySeriesService
     /**
      * @param  array<int, string>  $links  ordered, episode 1 first
      */
-    public function createLinkedSeries(array $links, ?string $title = null, ?string $description = null): StorySeries
+    public function createLinkedSeries(array $links, ?string $title = null, ?string $description = null, ?User $user = null): StorySeries
     {
         $title ??= 'Series ' . now()->format('Y-m-d H:i:s');
 
         $series = StorySeries::create([
+            'user_id' => $user?->id,
             'title' => $title,
             'description' => $description,
         ]);
 
         Log::info('StorySeriesService: creating linked series', [
             'series_id' => $series->id,
+            'user_id' => $user?->id,
             'title' => $title,
             'link_count' => count($links),
         ]);
@@ -41,16 +44,17 @@ class StorySeriesService
 
             $story = Story::firstOrCreate(
                 ['medium_link' => $link],
-                ['series_id' => $series->id, 'episode_number' => $index + 1]
+                ['series_id' => $series->id, 'user_id' => $user?->id, 'episode_number' => $index + 1]
             );
 
             // Already existed (e.g. as a standalone story, or re-submitted) —
             // attach/renumber it into this series rather than duplicating.
             if ($story->series_id !== $series->id) {
-                $story->update(['series_id' => $series->id, 'episode_number' => $index + 1]);
+                $story->update(['series_id' => $series->id, 'user_id' => $user?->id, 'episode_number' => $index + 1]);
             }
         }
 
         return $series->fresh('stories');
     }
 }
+

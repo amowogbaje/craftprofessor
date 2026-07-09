@@ -12,10 +12,12 @@ class Story extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'series_id',
         'episode_number',
         'medium_link',
         'story_text',
+        'user_supplied_text',
         'prompt_generated',
         'fetch_attempts',
         'last_fetch_error',
@@ -24,6 +26,22 @@ class Story extends Model
     protected $casts = [
         'prompt_generated' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        // Keep user_id in sync with the owning series so every story is
+        // always directly queryable/scopable by owner, series or not.
+        static::saving(function (Story $story) {
+            if ($story->series_id && $story->isDirty('series_id') && !$story->isDirty('user_id')) {
+                $story->user_id = $story->series?->user_id ?? $story->user_id;
+            }
+        });
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function series(): BelongsTo
     {
@@ -60,15 +78,23 @@ class Story extends Model
             : $this->characters();
     }
 
-    /** Scheduler 1 target: stories with no text yet. */
+    /** Scheduler 1 target: stories with no text yet (and no user-supplied text either). */
     public function scopeMissingText($query)
     {
-        return $query->whereNull('story_text');
+        return $query->whereNull('story_text')->whereNull('user_supplied_text');
     }
 
     /** Scheduler 2 target: story text is ready but prompts haven't been generated. */
     public function scopeReadyForPrompts($query)
     {
-        return $query->whereNotNull('story_text')->where('prompt_generated', false);
+        return $query->where(function ($q) {
+            $q->whereNotNull('story_text')->orWhereNotNull('user_supplied_text');
+        })->where('prompt_generated', false);
+    }
+
+    /** The text to actually feed into prompt generation, whichever source it came from. */
+    public function getEffectiveTextAttribute(): ?string
+    {
+        return $this->user_supplied_text ?: $this->story_text;
     }
 }

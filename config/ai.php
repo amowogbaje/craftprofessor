@@ -116,6 +116,17 @@ return [
             // Use the Vertex regional endpoint
             'url' => 'https://us-central1-aiplatform.googleapis.com/v1/projects/' . env('GOOGLE_CLOUD_PROJECT_ID') . '/locations/us-central1/publishers/google/models/',
         ],
+        // Veo (image-to-video) via Vertex AI. Vertex auth is OAuth2 (a
+        // short-lived bearer token minted from your service account JSON),
+        // NOT a simple API key — see VideoGeneratorService::accessToken().
+        'veo' => [
+            'driver' => 'vertex-veo',
+            'model' => env('VEO_MODEL', 'veo-3.0-generate-001'),
+            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
+            'location' => env('GOOGLE_CLOUD_LOCATION', 'us-central1'),
+            'url' => 'https://us-central1-aiplatform.googleapis.com/v1/projects/' . env('GOOGLE_CLOUD_PROJECT_ID') . '/locations/us-central1/publishers/google/models/',
+        ],
+
         'imagen-2' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'), // Keep using your AIza... API Key

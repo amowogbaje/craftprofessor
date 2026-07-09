@@ -42,6 +42,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Stateless JWT guard used by the API (see App\Providers\AppServiceProvider
+        // and App\Services\JwtService). Config for the token itself lives in
+        // config/jwt.php.
+        'api' => [
+            'driver' => 'jwt',
+            'provider' => 'users',
+        ],
     ],
 
     /*
