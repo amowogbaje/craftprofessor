@@ -17,35 +17,39 @@ class GenerateImagePrompts extends Command
     protected $signature = 'story:generate-image-prompts';
     protected $description = 'Generate the 10 image prompts + pinterest metadata for the next ready story.';
 
-    public function handle(): int
+    public function handle(ImageGeneratorService $service): int
     {
-        $remainingBudget = $this->remainingDailyBudget(); // returns count still allowed, both cap types
-        $batchSize = min((int) $this->option('limit'), config('images.batch_size_per_run'), $remainingBudget);
+        // Episode order matters: episode 1 must generate its characters
+        // before episode 2 runs, so episode 2 can reuse them instead of
+        // recreating them. Standalone stories (episode_number null) have no
+        // such dependency and are interleaved by creation order.
+        $story = Story::readyForPrompts()
+            ->orderByRaw('CASE WHEN episode_number IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('episode_number')
+            ->oldest('id')
+            ->first();
 
-        if ($batchSize <= 0) {
-            $this->info('Daily cap reached.');
+        if (!$story) {
+            $this->info('No stories ready for prompt generation.');
             return self::SUCCESS;
         }
 
-        $dispatched = 0;
+        $this->info("Generating prompts for story #{$story->id}");
 
-        // Portraits first, batched
-        $characters = Character::awaitingPortrait()->oldest('id')->limit($batchSize)->get();
-        foreach ($characters as $character) {
-            GenerateCharacterImageJob::dispatch($character)->onQueue('images');
-            $dispatched++;
+        try {
+            $service->generatePromptsForStory($story);
+            $this->info("Story #{$story->id}: prompts generated and stored.");
+        } catch (\Throwable $e) {
+            Log::error('story:generate-image-prompts failed', [
+                'story_id' => $story->id,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            $this->error("Failed: {$e->getMessage()}");
+            report($e);
         }
 
-        $remaining = $batchSize - $dispatched;
-        if ($remaining > 0) {
-            $prompts = $this->readyScenePrompts($remaining);
-            foreach ($prompts as $prompt) {
-                GenerateSceneImageJob::dispatch($prompt)->onQueue('images');
-                $dispatched++;
-            }
-        }
-
-        $this->info("Dispatched {$dispatched} image jobs.");
         return self::SUCCESS;
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\StoryImagePrompt;
 use App\Models\Video;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -21,39 +22,136 @@ class DashboardController extends Controller
     public function feed(Request $request): JsonResponse
     {
         $user = $request->user();
+
         $type = $request->query('type', 'all');
         $status = $request->query('status', 'all');
         $sort = $request->query('sort', 'newest');
-        $search = trim((string) $request->query('search', ''));
+        $search = trim($request->query('search', ''));
+
         $perPage = min((int) $request->query('per_page', 24), 60);
-        $offset = (int) ($request->query('cursor') ?: 0);
+        $offset = (int) $request->query('cursor', 0);
 
-        $items = collect();
+        /*
+        |--------------------------------------------------------------------------
+        | Images Query
+        |--------------------------------------------------------------------------
+        */
 
-        if ($type !== 'video') {
-            $q = StoryImagePrompt::where('user_id', $user->id)->whereNotNull('image_generated_url');
-            if ($status !== 'all') $q->where('status', $status);
-            if ($search !== '') $q->where('prompt', 'like', "%{$search}%");
-            $items = $items->merge($q->get()->map(fn ($p) => $this->presentImage($p)));
+        $images = DB::table('story_image_prompts')
+            ->selectRaw("
+                id,
+                'image' as type,
+                image_generated_url as url,
+                prompt,
+                status,
+                scheduled_at,
+                published_at,
+                story_id,
+                NULL as source_image_prompt_id,
+                (
+                    EXISTS(
+                        SELECT 1
+                        FROM videos
+                        WHERE videos.story_image_prompt_id = story_image_prompts.id
+                    )
+                ) as has_video,
+                COALESCE(generated_at, created_at) as sort_at
+            ")
+            ->where('user_id', $user->id)
+            ->whereNotNull('image_generated_url');
+
+        if ($status !== 'all') {
+            $images->where('status', $status);
         }
 
-        if ($type !== 'image') {
-            $q = Video::where('user_id', $user->id)->whereNotNull('video_url');
-            if ($status !== 'all') $q->where('status', $status);
-            $items = $items->merge($q->get()->map(fn ($v) => $this->presentVideo($v)));
+        if ($search !== '') {
+            $images->where('prompt', 'like', "%{$search}%");
         }
 
-        $items = match ($sort) {
-            'oldest' => $items->sortBy('sort_at'),
-            'scheduled_at' => $items->sortBy(fn ($i) => $i['scheduled_at'] ?? '9999'),
-            default => $items->sortByDesc('sort_at'),
-        }->values();
+        /*
+        |--------------------------------------------------------------------------
+        | Videos Query
+        |--------------------------------------------------------------------------
+        */
 
-        $page = $items->slice($offset, $perPage)->values();
-        $nextOffset = $offset + $perPage;
-        $nextCursor = $nextOffset < $items->count() ? (string) $nextOffset : null;
+        $videos = DB::table('videos')
+            ->selectRaw("
+                id,
+                'video' as type,
+                video_url as url,
+                NULL as prompt,
+                status,
+                scheduled_at,
+                published_at,
+                NULL as story_id,
+                story_image_prompt_id as source_image_prompt_id,
+                NULL as has_video,
+                COALESCE(generated_at, created_at) as sort_at
+            ")
+            ->where('user_id', $user->id)
+            ->whereNotNull('video_url');
 
-        return response()->json(['data' => $page, 'next_cursor' => $nextCursor]);
+        if ($status !== 'all') {
+            $videos->where('status', $status);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Merge
+        |--------------------------------------------------------------------------
+        */
+
+        if ($type === 'image') {
+            $query = $images;
+        } elseif ($type === 'video') {
+            $query = $videos;
+        } else {
+            $query = $images->unionAll($videos);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting
+        |--------------------------------------------------------------------------
+        */
+
+        switch ($sort) {
+            case 'oldest':
+                $query = DB::query()
+                    ->fromSub($query, 'feed')
+                    ->orderBy('sort_at');
+                break;
+
+            case 'scheduled_at':
+                $query = DB::query()
+                    ->fromSub($query, 'feed')
+                    ->orderByRaw('scheduled_at IS NULL')
+                    ->orderBy('scheduled_at');
+                break;
+
+            default:
+                $query = DB::query()
+                    ->fromSub($query, 'feed')
+                    ->orderByDesc('sort_at');
+                break;
+        }
+
+        $rows = $query
+            ->offset($offset)
+            ->limit($perPage + 1)
+            ->get();
+
+        $nextCursor = null;
+
+        if ($rows->count() > $perPage) {
+            $rows = $rows->take($perPage);
+            $nextCursor = (string) ($offset + $perPage);
+        }
+
+        return response()->json([
+            'data' => $rows,
+            'next_cursor' => $nextCursor,
+        ]);
     }
 
     public function updateImage(Request $request, StoryImagePrompt $imagePrompt): JsonResponse
