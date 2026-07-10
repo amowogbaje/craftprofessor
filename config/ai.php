@@ -95,7 +95,7 @@ return [
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
-            'model' => 'gemini-2.5-flash', // Use 2.5 for text tasks
+            'model' => 'gemini-2.0-flash', // Use 2.5 for text tasks
             'options' => [
                 'timeout' => 60,
                 'safety_settings' => [
@@ -105,7 +105,7 @@ return [
                     'SEXUALLY_EXPLICIT' => 'BLOCK_ONLY_HIGH',
                 ],
             ],
-            'image_model' => 'imagen-3.0-generate-002', // Keep this, it is standard for now
+            // 'image_model' => 'imagen-3.0-generate-002', // Keep this, it is standard for now
             'url' => 'https://generativelanguage.googleapis.com/v1beta/', // Note: Plan to move to a stable 'v1' URL if possible
         ],
 

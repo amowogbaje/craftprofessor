@@ -6,6 +6,7 @@ use App\Models\Story;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Stringable;
 use Laravel\Ai\Contracts\Agent;
+use Illuminate\Database\Eloquent\Collection;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Promptable;
 
@@ -22,51 +23,56 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
 
-    public function __construct(protected Story $story)
+    public function __construct(protected Story $story, protected Collection $existingCharacters)
     {
+    }
+
+    protected function characterList(): string
+    {
+        return $this->existingCharacters->map(function ($c) {
+            $hasPrompt = !empty($c->image_prompt);
+            $status = $hasPrompt ? 'LOCKED' : 'NEED_DESIGN';
+            $promptContext = $hasPrompt ? "Prompt: {$c->image_prompt}" : "";
+            
+            return "Name: {$c->name} ({$status}) {$promptContext}";
+        })->implode("\n");
     }
 
     public function instructions(): Stringable|string
     {
         return <<<INSTRUCTIONS
-        You are an art director turning a written story into a batch of image
+        You are an art director turning a written story into a batch of image 
         generation prompts for a text-to-image AI model, destined for Pinterest.
-        Respond only with the requested structured data — no commentary.
+        Respond ONLY with valid JSON matching the requested schema. No commentary.
 
         STORY TEXT:
         {$this->story->story_text}
 
-        KNOWN CHARACTERS: {$this->characterList()}
+        CHARACTER REFERENCE LIST:
+        {$this->characterList()}
 
-        Produce a "characters" array (one entry per distinct character who
-        appears in your prompts — reuse KNOWN CHARACTERS where they fit; for
-        any marked "design already locked", reuse that exact name and do not
-        change their described appearance; invent consistent new names/designs
-        only for characters not already on the list) and a "prompts" array of
-        exactly 10 scene prompts.
+        INSTRUCTION RULES:
+        1. Produce a "characters" array for every character appearing in the 10 scene prompts.
+        - If a character is marked "LOCKED" in the reference list, you MUST 
+            reuse that name exactly and NOT provide a new image_prompt.
+        - If a character is marked "NEED_DESIGN" or is new, you MUST provide a detailed 
+            image_prompt.
+        2. Produce a "prompts" array of exactly 10 scene prompts.
+        - Use the exact names from the "characters" array for consistency.
+        - Every prompt MUST end with the literal note: "(for AI image generation, upload-ready)".
 
         Each "characters" entry:
-        - name: the character's name, used consistently across "prompts".
-        - image_prompt: a detailed close-up portrait/reference-sheet prompt for
-          an AI image generator, focused ONLY on that character's face and
-          appearance (no scene/background action), written so the same
-          character can be recognizably regenerated later. End it with the
-          literal note "(for AI image generation, upload-ready, character
-          reference)".
+        - name: the character's name.
+        - image_prompt: a detailed close-up portrait prompt (for NEW characters only). 
+        Focus ONLY on face and appearance (no scene/background). 
+        End with: "(for AI image generation, upload-ready, character reference)".
 
         Each "prompts" entry:
-        - prompt: a vivid, single-scene visual description for an AI image
-          generator. It MUST explicitly name the character(s) shown, reusing
-          the exact names from "characters" above for consistency. End the
-          prompt text with the literal note "(for AI image generation,
-          upload-ready)".
-        - character_names: array of character name strings depicted in that
-          prompt (must match names in "characters").
-        - pinterest_title: a punchy, scroll-stopping Pinterest pin title (under
-          100 chars) using current trending Pinterest phrasing for this genre.
-        - pinterest_description: a 1-2 sentence Pinterest description packed
-          with trending, high-search catch phrases/hashtags relevant to this
-          story's genre and hook, written to maximize saves/clicks.
+        - prompt: vivid, single-scene visual description. Explicitly name the characters shown.
+        - character_names: array of character name strings.
+        - pinterest_title: punchy, scroll-stopping title (under 100 chars).
+        - pinterest_description: 1-2 sentence description packed with trending search 
+        catch phrases and hashtags relevant to this story's genre.
         INSTRUCTIONS;
     }
 
@@ -82,7 +88,7 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                 ->items(
                     $schema->object(fn (JsonSchema $s) => [
                         'name' => $s->string()->required(),
-                        'image_prompt' => $s->string()->required(),
+                        'image_prompt' => $s->string()->nullable(),
                     ])
                 )
                 ->required(),
@@ -101,20 +107,5 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
         ];
     }
 
-    protected function characterList(): string
-    {
-        $known = $this->story->knownCharacters()->get();
-
-        if ($known->isEmpty()) {
-            return '(no named characters on file — invent fitting names consistent with the story)';
-        }
-
-        return $known->map(function ($c) {
-            $status = $c->img_url
-                ? 'design already locked, DO NOT redesign — reuse name exactly'
-                : 'no design yet';
-
-            return "{$c->name} ({$status})";
-        })->implode(', ');
-    }
+    
 }

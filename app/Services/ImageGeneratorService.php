@@ -25,6 +25,8 @@ class ImageGeneratorService
     {
         Log::info('ImageGeneratorService: generating prompts for story', ['story_id' => $story->id]);
 
+        $existing = $story->knownCharacters()->get();
+
         $user = $story->user;
         $batchCost = (int) config('coins.costs.image_prompt') * 10; // schema always returns exactly 10 prompts
 
@@ -42,8 +44,8 @@ class ImageGeneratorService
         try {
             $story->imagePrompts()->delete();
 
-            $response = (new ImagePromptAgent($story))
-                ->prompt('Generate the character and scene prompts now.');
+            $response = (new ImagePromptAgent($story, $existing))
+                ->prompt('Generate only the missing character prompts and new scene prompts.');
 
             $characters = $response['characters'] ?? [];
             $prompts = $response['prompts'] ?? [];

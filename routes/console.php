@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schedule;
 //     ->withoutOverlapping();
 
 // Scheduler 2: generate the 10 image prompts + pinterest metadata.
-// Schedule::command('story:generate-image-prompts')->everyFifteenMinutes()->withoutOverlapping();
+Schedule::command('story:generate-image-prompts')->everyFifteenMinutes()->withoutOverlapping();
 
 // Scheduler 3: generate up to 3 images/day, checked frequently so it fires
 // $schedule->command('story:generate-images --limit=50 --time-budget=50')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
