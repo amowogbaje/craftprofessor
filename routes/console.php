@@ -2,6 +2,10 @@
 
 use Illuminate\Support\Facades\Schedule;
 
+// Test scheduler by logging every five minutes
+Schedule::command('log:five-minutes')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
 // Scheduler 1: fetch story_text from Medium every 5 minutes.
 // Schedule::command('story:fetch-medium-text')
 //     ->everyFiveMinutes()
@@ -27,5 +31,5 @@ Schedule::command('story:generate-image-prompts')
 // Scheduler 5: flip scheduled dashboard content (images/videos) to
 // published once their scheduled_at time arrives.
 Schedule::command('content:publish-due')
-    ->everyMinute()
+    ->everyFiveMinutes()
     ->withoutOverlapping();
