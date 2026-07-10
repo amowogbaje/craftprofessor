@@ -3,16 +3,13 @@
 use Illuminate\Support\Facades\Schedule;
 
 // Test scheduler by logging every five minutes
-Schedule::command('log:five-minutes')
-    ->everyFiveMinutes()
-    ->withoutOverlapping();
 // Scheduler 1: fetch story_text from Medium every 5 minutes.
 // Schedule::command('story:fetch-medium-text')
 //     ->everyFiveMinutes()
 //     ->withoutOverlapping();
 
 // Scheduler 2: generate the 10 image prompts + pinterest metadata.
-Schedule::command('story:generate-image-prompts')
+// Schedule::command('story:generate-image-prompts')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
 
