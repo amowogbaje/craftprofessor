@@ -131,4 +131,14 @@ class User extends Authenticatable
             $user->publishSetting()->firstOrCreate([], []);
         });
     }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    public function socialAccount(string $provider): ?SocialAccount
+    {
+        return $this->socialAccounts()->where('provider', $provider)->first();
+    }
 }
