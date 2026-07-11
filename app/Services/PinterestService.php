@@ -13,7 +13,8 @@ class PinterestService
 {
     public const AUTH_URL = 'https://www.pinterest.com/oauth/';
     public const TOKEN_URL = 'https://api.pinterest.com/v5/oauth/token';
-
+    public const STATE_TTL_MINUTES = 10;
+    
     public const ALL_SCOPES = [
         'pins:read',
         'boards:read',
@@ -70,6 +71,48 @@ class PinterestService
     // ---------------------------------------------------------------
     // OAuth
     // ---------------------------------------------------------------
+
+    public function generateState(int $userId, array $extra = []): string
+    {
+        $payload = array_merge($extra, [
+            'user_id' => $userId,
+            'nonce' => Str::random(32),
+            'expires_at' => now()->addMinutes(self::STATE_TTL_MINUTES)->timestamp,
+        ]);
+
+        $encrypted = encrypt(json_encode($payload));
+
+        return rtrim(strtr(base64_encode($encrypted), '+/', '-_'), '=');
+    }
+
+    /**
+     * Decode + verify a state string produced by generateState().
+     * Throws if tampered, malformed, or expired.
+     */
+    public function parseState(string $state): array
+    {
+        $padded = str_pad(strtr($state, '-_', '+/'), strlen($state) % 4 === 0 ? strlen($state) : strlen($state) + (4 - strlen($state) % 4), '=');
+
+        try {
+            $encrypted = base64_decode($padded, true);
+            if ($encrypted === false) {
+                throw new RuntimeException('Malformed state encoding.');
+            }
+            $payload = json_decode(decrypt($encrypted), true);
+        } catch (\Throwable $e) {
+            throw new RuntimeException('Invalid or tampered OAuth state.');
+        }
+
+        if (!is_array($payload) || !isset($payload['user_id'], $payload['expires_at'])) {
+            throw new RuntimeException('Malformed OAuth state payload.');
+        }
+
+        if ($payload['expires_at'] < now()->timestamp) {
+            throw new RuntimeException('OAuth state expired — please try connecting again.');
+        }
+
+        return $payload;
+    }
 
     public function getAuthorizationUrl(string $state, array $scopes = self::ALL_SCOPES): string
     {
