@@ -129,19 +129,31 @@ class PinterestService
 
     public function exchangeCodeForToken(string $code): array
     {
+        $clientId = config('services.pinterest.client_id');
+        $clientSecret = config('services.pinterest.client_secret');
+        $redirectUri = config('services.pinterest.redirect_uri');
+
+        Log::info('PinterestService: token exchange attempt', [
+            'client_id' => $clientId,
+            'client_secret_length' => strlen((string) $clientSecret),
+            'client_secret_preview' => substr((string) $clientSecret, 0, 3) . '...' . substr((string) $clientSecret, -3),
+            'redirect_uri' => $redirectUri,
+            'code_preview' => substr($code, 0, 10) . '...',
+        ]);
+
         $response = Http::asForm()
-            ->withBasicAuth(
-                config('services.pinterest.client_id'),
-                config('services.pinterest.client_secret'),
-            )
+            ->withBasicAuth($clientId, $clientSecret)
             ->post(self::TOKEN_URL, [
                 'grant_type' => 'authorization_code',
                 'code' => $code,
-                'redirect_uri' => config('services.pinterest.redirect_uri'),
+                'redirect_uri' => $redirectUri,
             ]);
 
         if ($response->failed()) {
-            Log::error('PinterestService: token exchange failed', ['body' => Str::limit($response->body(), 1000)]);
+            Log::error('PinterestService: token exchange failed', [
+                'status' => $response->status(),
+                'body' => Str::limit($response->body(), 1000),
+            ]);
             throw new RuntimeException("Pinterest token exchange failed: {$response->body()}");
         }
 
