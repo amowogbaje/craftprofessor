@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\StorySeriesController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\SocialAccountController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
