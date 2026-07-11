@@ -37,6 +37,9 @@ return [
 
 
     'pinterest' => [
+        'client_id' => env('PINTEREST_CLIENT_ID'),
+        'client_secret' => env('PINTEREST_CLIENT_SECRET'),
+        'redirect_uri' => env('PINTEREST_REDIRECT_URI'),
         'access_token' => env('PINTEREST_ACCESS_TOKEN'),
         'board_id' => env('PINTEREST_BOARD_ID'),
     ],

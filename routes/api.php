@@ -43,6 +43,9 @@ Route::prefix('auth')->group(function () {
 */
 Route::post('/webhooks/flutterwave', [WalletController::class, 'handleWebhook']);
 Route::get('/wallet/topup/callback', [WalletController::class, 'handleRedirectCallback'])->name('wallet.topup.callback');
+Route::get('/social/pinterest/callback', [SocialAccountController::class, 'pinterestCallback']);
+
+
 Route::get('/', fn () => response()->json(['message' => 'Social Media Assistant API is running.']));
 /*
 |--------------------------------------------------------------------------
@@ -74,4 +77,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/wallet', [WalletController::class, 'show']);
     Route::get('/wallet/transactions', [WalletController::class, 'transactions']);
     Route::post('/wallet/topup', [WalletController::class, 'initiateTopup']);
+
+    // Social account management
+    Route::get('/accounts', [SocialAccountController::class, 'index']);
+    Route::delete('/accounts/{provider}', [SocialAccountController::class, 'destroy']);
+    Route::get('/pinterest/connect', [SocialAccountController::class, 'pinterestConnect']);
 });
