@@ -79,7 +79,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/wallet/topup', [WalletController::class, 'initiateTopup']);
 
     // Social account management
-    Route::get('/accounts', [SocialAccountController::class, 'index']);
-    Route::delete('/accounts/{provider}', [SocialAccountController::class, 'destroy']);
-    Route::get('/pinterest/connect', [SocialAccountController::class, 'pinterestConnect']);
+    Route::prefix('social')->group(function () {
+        Route::get('/accounts', [SocialAccountController::class, 'index']);
+        Route::delete('/accounts/{provider}', [SocialAccountController::class, 'destroy']);
+        Route::get('/pinterest/connect', [SocialAccountController::class, 'pinterestConnect']);
+    });
 });
