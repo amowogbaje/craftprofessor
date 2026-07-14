@@ -240,6 +240,11 @@ class PinterestService
             throw new RuntimeException("Pinterest GET {$endpoint} failed ({$response->status()}): {$response->body()}");
         }
 
+        Log::info('PinterestService: GET success', [
+            'endpoint' => $endpoint,
+            'status' => $response->status(),
+            'body_preview' => Str::limit($response->body(), 500),
+        ]);
         return $response->json();
     }
 
