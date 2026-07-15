@@ -50,7 +50,7 @@ class SocialAccountController extends Controller
                 'token_expires_at' => isset($token['expires_in'])
                     ? now()->addSeconds($token['expires_in'])
                     : null,
-                'scopes' => isset($token['scope']) ? explode(',', $token['scope']) : [],
+                'scopes' => isset($token['scope']) ? explode(' ', $token['scope']) : [],
                 'connected_at' => now(),
             ]
         );
