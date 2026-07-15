@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 class ImageGeneratorService
 {
     public function __construct(
-        protected ImageGeneratorAgent $imageAgent,
+        protected \App\Ai\Contracts\ImageProviderContract $imageAgent,
         protected \App\Services\WalletService $wallet,
         protected \App\Services\UsageLimitService $limits,
     ) {
