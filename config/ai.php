@@ -180,4 +180,35 @@ return [
         ],
     ],
 
+
+    // config/ai.php — add near the bottom, alongside existing keys
+
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Image Providers (NOT native Laravel\Ai drivers)
+    |--------------------------------------------------------------------------
+    |
+    | These power App\Ai\Contracts\ImageProviderContract directly — bound in
+    | AppServiceProvider — and are separate from the 'providers' array above,
+    | which only contains drivers AiManager itself knows how to resolve via
+    | createXxxDriver()/extend(). Do NOT reference 'cloudflare' or 'together'
+    | as a Laravel\Ai provider name (e.g. Image::of(...)->generate(provider: ...))
+    | — they only exist behind ImageGeneratorService's own $imageAgent.
+    |
+    */
+
+    'default_image_provider' => env('IMAGE_PROVIDER', 'default'), // default | cloudflare | together
+
+    'image_providers' => [
+        'cloudflare' => [
+            'account_id' => env('CLOUDFLARE_ACCOUNT_ID'),
+            'key' => env('CLOUDFLARE_API_TOKEN'),
+            'model' => env('CLOUDFLARE_IMAGE_MODEL', '@cf/stabilityai/stable-diffusion-xl-base-1.0'),
+        ],
+        'together' => [
+            'key' => env('TOGETHER_API_KEY'),
+            'model' => env('TOGETHER_IMAGE_MODEL', 'black-forest-labs/FLUX.1-schnell'),
+        ],
+    ],
+
 ];

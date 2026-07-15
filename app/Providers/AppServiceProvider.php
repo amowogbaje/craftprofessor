@@ -13,7 +13,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(\App\Ai\Contracts\ImageProviderContract::class, function ($app) {
+            return match (config('ai.default_image_provider')) {
+                'cloudflare' => new \App\Ai\Providers\CloudflareWorkersAiProvider(
+                    config('ai.image_providers.cloudflare.account_id'),
+                    config('ai.image_providers.cloudflare.key'),
+                    config('ai.image_providers.cloudflare.model'),
+                ),
+                'together' => new \App\Ai\Providers\TogetherAiImageProvider(
+                    config('ai.image_providers.together.key'),
+                    config('ai.image_providers.together.model'),
+                ),
+                default => $app->make(\App\Ai\Agents\ImageGeneratorAgent::class),
+            };
+        });
     }
 
     /**
@@ -34,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
 
             return app(JwtService::class)->userFromToken($token);
         });
+        
     }
 }
 
