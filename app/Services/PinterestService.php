@@ -18,6 +18,7 @@ class PinterestService
     public const ALL_SCOPES = [
         'pins:read',
         'boards:read',
+        'boards:write',
         'user_accounts:read',
         'ads:read',
         'catalogs:read',
