@@ -167,13 +167,17 @@ class ImageGeneratorService
             try {
                 $image = $this->imageProvider->generatePortrait($character->image_prompt);
 
-                $path = $image->storePubliclyAs(
-                    "character-images/{$character->story_id}/{$character->id}-" . Str::random(8) . '.png'
-                );
-                $url = Storage::disk('public')->url($path);
+                $basePath = "character-images/{$character->story_id}/{$character->id}-" . Str::random(8);
+ 
+                $optimizedPath = $image->storeOptimizedAs("{$basePath}.webp");
+                $qualityPath = $image->storeQualityAs("{$basePath}.jpg");
+
+                $url = Storage::disk('public')->url($optimizedPath);
+                $qualityUrl = Storage::disk('public')->url($qualityPath);
 
                 $character->update([
                     'img_url' => $url,
+                    'img_quality_url' => $qualityUrl,
                     'generated_at' => now(),
                     'last_generation_error' => null,
                 ]);
@@ -235,13 +239,16 @@ class ImageGeneratorService
 
                 $image = $this->imageProvider->generateScene($imagePrompt->prompt, $referenceImageUrls);
 
-                $path = $image->storePubliclyAs(
-                    "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . '.png'
-                );
-                $url = Storage::disk('public')->url($path);
+                $basePath = "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8);
+ 
+                $optimizedPath = $image->storeOptimizedAs("{$basePath}.webp");
+                $qualityPath = $image->storeQualityAs("{$basePath}.jpg");
+                $url = Storage::disk('public')->url($optimizedPath);
+                $qualityUrl = Storage::disk('public')->url($qualityPath);
 
                 $imagePrompt->update([
                     'image_generated_url' => $url,
+                    'image_generated_url_quality' => $qualityUrl,
                     'image_coin_cost' => $cost,
                     'generated_at' => now(),
                     'last_generation_error' => null,
