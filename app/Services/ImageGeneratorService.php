@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 class ImageGeneratorService
 {
     public function __construct(
-        protected \App\Ai\Contracts\ImageProviderContract $imageAgent,
+        protected \App\Ai\Contracts\ImageProviderContract $imageProvider,
         protected \App\Services\WalletService $wallet,
         protected \App\Services\UsageLimitService $limits,
     ) {
@@ -165,7 +165,7 @@ class ImageGeneratorService
 
         while ($attempt < $maxRetries) {
             try {
-                $image = $this->imageAgent->generatePortrait($character->image_prompt);
+                $image = $this->imageProvider->generatePortrait($character->image_prompt);
 
                 $path = $image->storePubliclyAs(
                     "character-images/{$character->story_id}/{$character->id}-" . Str::random(8) . '.png'
@@ -233,7 +233,7 @@ class ImageGeneratorService
                     ->values()
                     ->all();
 
-                $image = $this->imageAgent->generateScene($imagePrompt->prompt, $referenceImageUrls);
+                $image = $this->imageProvider->generateScene($imagePrompt->prompt, $referenceImageUrls);
 
                 $path = $image->storePubliclyAs(
                     "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . '.png'
