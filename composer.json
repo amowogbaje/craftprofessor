@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "firebase/php-jwt": "^7.1",
+        "intervention/image": "^4.2",
         "laravel/ai": "^0.8.1",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
