@@ -43,7 +43,7 @@ class StorySeriesService
             }
 
             $story = Story::firstOrCreate(
-                ['medium_link' => $link],
+                ['story_link' => $link],
                 ['series_id' => $series->id, 'user_id' => $user?->id, 'episode_number' => $index + 1]
             );
 

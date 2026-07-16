@@ -109,7 +109,7 @@ class ImageGeneratorService
                     'main_character_ids' => $characterIds,
                     'pinterest_title' => $entry['pinterest_title'] ?? null,
                     'pinterest_description' => $entry['pinterest_description'] ?? null,
-                    'pinterest_link' => $story->medium_link,
+                    'pinterest_link' => $story->story_link,
                 ]);
             }
 

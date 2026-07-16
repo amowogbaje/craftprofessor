@@ -7,7 +7,7 @@ use App\Models\StorySeries;
 use Illuminate\Database\Seeder;
 
 /**
- * Seeds stories with ONLY medium_link set — story_text stays null on
+ * Seeds stories with ONLY story_link set — story_text stays null on
  * purpose so Scheduler 1 has real work to pick up on the next run.
  *
  * All links below are treated as episodes of ONE linked series, in the
@@ -52,7 +52,7 @@ class StorySeeder extends Seeder
 
         foreach ($links as $index => $link) {
             $story = Story::firstOrCreate(
-                ['medium_link' => $link],
+                ['story_link' => $link],
                 ['series_id' => $series->id, 'episode_number' => $index + 1]
             );
 

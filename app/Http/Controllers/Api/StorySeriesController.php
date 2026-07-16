@@ -63,7 +63,7 @@ class StorySeriesController extends Controller
                 'episodes' => $series->stories->map(fn ($story) => [
                     'id' => $story->id,
                     'episode_number' => $story->episode_number,
-                    'medium_link' => $story->medium_link,
+                    'story_link' => $story->story_link,
                     'story_text_fetched' => !is_null($story->story_text),
                 ]),
             ],

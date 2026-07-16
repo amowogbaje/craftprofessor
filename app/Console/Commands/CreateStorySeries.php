@@ -38,7 +38,7 @@ class CreateStorySeries extends Command
         $series = $service->createLinkedSeries($links, $this->argument('title'), $this->option('description'));
 
         foreach ($series->stories as $story) {
-            $this->info("Episode {$story->episode_number}: {$story->medium_link}");
+            $this->info("Episode {$story->episode_number}: {$story->story_link}");
         }
 
         $this->info("Series '{$series->title}' created with {$series->stories->count()} episode(s) (series_id {$series->id}).");

@@ -15,7 +15,7 @@ class Story extends Model
         'user_id',
         'series_id',
         'episode_number',
-        'medium_link',
+        'story_link',
         'story_text',
         'user_supplied_text',
         'prompt_generated',
