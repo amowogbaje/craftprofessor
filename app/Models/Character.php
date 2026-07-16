@@ -28,6 +28,7 @@ class Character extends Model
         'series_id',
         'name',
         'img_url',
+        'img_url_quality',
         'image_prompt',
         'generated_at',
         'last_generation_error',

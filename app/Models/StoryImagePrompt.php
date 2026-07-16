@@ -21,6 +21,7 @@ class StoryImagePrompt extends Model
         'story_id',
         'prompt',
         'image_generated_url',
+        'image_generated_url_quality',
         'status',
         'scheduled_at',
         'published_at',
