@@ -62,6 +62,6 @@ class SocialAccountController extends Controller
             // non-fatal — account is connected even if this enrichment call fails
         }
 
-        return redirect(config('app.frontend_url') . '/settings/social?connected=pinterest');
+        return redirect(config('app.frontend_url') . '/settings/social-accounts?connected=pinterest');
     }
 }

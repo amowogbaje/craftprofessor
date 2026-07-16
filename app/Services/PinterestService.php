@@ -11,10 +11,11 @@ use RuntimeException;
 
 class PinterestService
 {
+    // Consent/authorize page — same in both environments. Only the data
+    // API and token exchange endpoints differ between sandbox/production.
     public const AUTH_URL = 'https://www.pinterest.com/oauth/';
-    public const TOKEN_URL = 'https://api.pinterest.com/v5/oauth/token';
     public const STATE_TTL_MINUTES = 10;
-    
+
     public const ALL_SCOPES = [
         'pins:read',
         'boards:read',
@@ -25,7 +26,10 @@ class PinterestService
         'pins:write', // needed for postPin
     ];
 
-    protected string $baseUrl = 'https://api.pinterest.com/v5';
+    // 'production' | 'sandbox'. Switchable via config/services.php
+    // (services.pinterest.environment / PINTEREST_ENVIRONMENT env var) or
+    // per-instance via useSandbox()/useProduction() below.
+    protected string $environment;
 
     protected ?SocialAccount $account = null;
 
@@ -35,6 +39,8 @@ class PinterestService
         // (kept for cron/legacy use — prefer forUser()/forAccount() below).
         $this->accessToken ??= config('services.pinterest.access_token');
         $this->boardId ??= config('services.pinterest.board_id');
+
+        $this->environment = config('services.pinterest.environment', 'production');
     }
 
     /** Build a service bound to a specific user's connected Pinterest account. */
@@ -53,6 +59,30 @@ class PinterestService
         $service->account = $account;
 
         return $service;
+    }
+
+    // ---------------------------------------------------------------
+    // Sandbox / production — controlled entirely via .env
+    // (PINTEREST_ENVIRONMENT=sandbox|production, see config/services.php)
+    // ---------------------------------------------------------------
+
+    public function isSandbox(): bool
+    {
+        return $this->environment === 'sandbox';
+    }
+
+    protected function baseUrl(): string
+    {
+        return $this->isSandbox()
+            ? 'https://api-sandbox.pinterest.com/v5'
+            : 'https://api.pinterest.com/v5';
+    }
+
+    protected function tokenUrl(): string
+    {
+        return $this->isSandbox()
+            ? 'https://api-sandbox.pinterest.com/v5/oauth/token'
+            : 'https://api.pinterest.com/v5/oauth/token';
     }
 
     protected function requireAuth(): void
@@ -135,6 +165,7 @@ class PinterestService
         $redirectUri = config('services.pinterest.redirect_uri');
 
         Log::info('PinterestService: token exchange attempt', [
+            'environment' => $this->environment,
             'client_id' => $clientId,
             'client_secret_length' => strlen((string) $clientSecret),
             'client_secret_preview' => substr((string) $clientSecret, 0, 3) . '...' . substr((string) $clientSecret, -3),
@@ -144,7 +175,7 @@ class PinterestService
 
         $response = Http::asForm()
             ->withBasicAuth($clientId, $clientSecret)
-            ->post(self::TOKEN_URL, [
+            ->post($this->tokenUrl(), [
                 'grant_type' => 'authorization_code',
                 'code' => $code,
                 'redirect_uri' => $redirectUri,
@@ -152,6 +183,7 @@ class PinterestService
 
         if ($response->failed()) {
             Log::error('PinterestService: token exchange failed', [
+                'environment' => $this->environment,
                 'status' => $response->status(),
                 'body' => Str::limit($response->body(), 1000),
             ]);
@@ -168,7 +200,7 @@ class PinterestService
                 config('services.pinterest.client_id'),
                 config('services.pinterest.client_secret'),
             )
-            ->post(self::TOKEN_URL, [
+            ->post($this->tokenUrl(), [
                 'grant_type' => 'refresh_token',
                 'refresh_token' => $refreshToken,
             ]);
@@ -230,10 +262,11 @@ class PinterestService
     {
         $response = Http::withToken($this->accessToken)
             ->timeout(30)
-            ->get("{$this->baseUrl}{$endpoint}", $query);
+            ->get("{$this->baseUrl()}{$endpoint}", $query);
 
         if ($response->failed()) {
             Log::error('PinterestService: GET failed', [
+                'environment' => $this->environment,
                 'endpoint' => $endpoint,
                 'status' => $response->status(),
                 'body' => Str::limit($response->body(), 1000),
@@ -242,6 +275,7 @@ class PinterestService
         }
 
         Log::info('PinterestService: GET success', [
+            'environment' => $this->environment,
             'endpoint' => $endpoint,
             'status' => $response->status(),
             'body_preview' => Str::limit($response->body(), 500),
@@ -250,7 +284,7 @@ class PinterestService
     }
 
     // ---------------------------------------------------------------
-    // Existing pin creation (unchanged behavior, just uses $this->accessToken/boardId)
+    // Pin creation
     // ---------------------------------------------------------------
 
     public function postPin(StoryImagePrompt $imagePrompt): string
@@ -258,13 +292,14 @@ class PinterestService
         $this->requireAuth();
 
         Log::info('PinterestService: posting pin', [
+            'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
             'board_id' => $this->boardId,
         ]);
 
         $response = Http::withToken($this->accessToken)
             ->timeout(30)
-            ->post("{$this->baseUrl}/pins", [
+            ->post("{$this->baseUrl()}/pins", [
                 'board_id' => $this->boardId,
                 'title' => $imagePrompt->pinterest_title,
                 'description' => $imagePrompt->pinterest_description,
@@ -277,6 +312,7 @@ class PinterestService
 
         if ($response->failed()) {
             Log::error('PinterestService: pin creation failed', [
+                'environment' => $this->environment,
                 'story_image_prompt_id' => $imagePrompt->id,
                 'status' => $response->status(),
                 'body' => Str::limit($response->body(), 1000),
@@ -291,6 +327,7 @@ class PinterestService
         }
 
         Log::info('PinterestService: pin posted', [
+            'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
             'pin_id' => $pinId,
         ]);
@@ -310,7 +347,7 @@ class PinterestService
         $imageUrl = asset($imagePath);
 
         $response = Http::withToken($this->accessToken)
-            ->post("{$this->baseUrl}/pins", [
+            ->post("{$this->baseUrl()}/pins", [
                 'board_id' => $this->boardId,
                 'title' => $title,
                 'description' => $description,

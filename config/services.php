@@ -42,6 +42,7 @@ return [
         'redirect_uri' => env('PINTEREST_REDIRECT_URI'),
         'access_token' => env('PINTEREST_ACCESS_TOKEN'),
         'board_id' => env('PINTEREST_BOARD_ID'),
+        'environment' => env('PINTEREST_ENVIRONMENT', 'production'), // "production" or "sandbox"
     ],
 
     'google' => [
