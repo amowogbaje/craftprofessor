@@ -98,18 +98,20 @@ class GenerateStoryImages extends Command
      */
     protected function nextReadyScenePrompt(): ?StoryImagePrompt
     {
-        return StoryImagePrompt::query()
-            ->awaitingImage()
-            ->where(function ($query) {
-                // Include prompts with no characters
-                $query->whereNull('main_character_ids')
-                    ->orWhere('main_character_ids', '[]')
-                    // OR prompts where all referenced characters have an image
-                    ->orWhereDoesntHave('characters', function ($q) {
-                        $q->whereNull('img_url');
-                    });
-            })
+        return StoryImagePrompt::awaitingImage()
             ->oldest('id')
-            ->first();
+            ->get()
+            ->first(function (StoryImagePrompt $prompt) {
+
+                $ids = $prompt->main_character_ids ?? [];
+
+                if (empty($ids)) {
+                    return true;
+                }
+
+                return ! Character::whereIn('id', $ids)
+                    ->whereNull('img_url')
+                    ->exists();
+            });
     }
 }
