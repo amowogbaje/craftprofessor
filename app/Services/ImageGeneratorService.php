@@ -18,6 +18,7 @@ class ImageGeneratorService
         protected \App\Ai\Contracts\ImageProviderContract $imageProvider,
         protected \App\Services\WalletService $wallet,
         protected \App\Services\UsageLimitService $limits,
+        protected \App\Services\ImageCaptionOverlayService $captionOverlay,
     ) {
     }
 
@@ -105,6 +106,7 @@ class ImageGeneratorService
                     'user_id' => $story->user_id,
                     'story_id' => $story->id,
                     'prompt' => $entry['prompt'],
+                    'caption' => $entry['caption'] ?? null,
                     'prompt_coin_cost' => (int) config('coins.costs.image_prompt'),
                     'main_character_ids' => $characterIds,
                     'pinterest_title' => $entry['pinterest_title'] ?? null,
@@ -246,6 +248,16 @@ class ImageGeneratorService
                 $url = Storage::disk('public')->url($optimizedPath);
                 $qualityUrl = Storage::disk('public')->url($qualityPath);
 
+                if (!empty($imagePrompt->caption)) {
+                    $this->captionOverlay->apply(
+                        Storage::disk('public')->path($optimizedPath),
+                        $imagePrompt->caption
+                    );
+                    $this->captionOverlay->apply(
+                        Storage::disk('public')->path($qualityPath),
+                        $imagePrompt->caption
+                    );
+                }
                 $imagePrompt->update([
                     'image_generated_url' => $url,
                     'image_generated_url_quality' => $qualityUrl,
