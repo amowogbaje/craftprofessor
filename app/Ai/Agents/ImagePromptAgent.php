@@ -33,7 +33,7 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
             $hasPrompt = !empty($c->image_prompt);
             $status = $hasPrompt ? 'LOCKED' : 'NEED_DESIGN';
             $promptContext = $hasPrompt ? "Prompt: {$c->image_prompt}" : "";
-            
+
             return "Name: {$c->name} ({$status}) {$promptContext}";
         })->implode("\n");
     }
@@ -41,9 +41,12 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<INSTRUCTIONS
-        You are an art director turning a written story into a batch of image 
-        generation prompts for a text-to-image AI model, destined for Pinterest.
-        Respond ONLY with valid JSON matching the requested schema. No commentary.
+        You are an art director AND a cinematographer turning a written story into a
+        batch of image generation prompts for a text-to-image AI model, destined for
+        Pinterest. Your job is not just "describe the scene" — it's to stage a shot
+        that looks like a still from a prestige drama or a24 film, one dramatic beat
+        pulled from the story at a time. Respond ONLY with valid JSON matching the
+        requested schema. No commentary.
 
         STORY TEXT:
         {$this->story->story_text}
@@ -53,9 +56,9 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 
         INSTRUCTION RULES:
         1. Produce a "characters" array for every character appearing in the 10 scene prompts.
-        - If a character is marked "LOCKED" in the reference list, you MUST 
+        - If a character is marked "LOCKED" in the reference list, you MUST
             reuse that name exactly and NOT provide a new image_prompt.
-        - If a character is marked "NEED_DESIGN" or is new, you MUST provide a detailed 
+        - If a character is marked "NEED_DESIGN" or is new, you MUST provide a detailed
             image_prompt.
         2. Produce a "prompts" array of exactly 10 scene prompts.
         - Use the exact names from the "characters" array for consistency.
@@ -63,16 +66,51 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 
         Each "characters" entry:
         - name: the character's name.
-        - image_prompt: a detailed close-up portrait prompt (for NEW characters only). 
-        Focus ONLY on face and appearance (no scene/background). 
+        - image_prompt: a detailed close-up portrait prompt (for NEW characters only).
+        Focus ONLY on face and appearance (no scene/background). Specify realistic
+        skin texture, catchlights in the eyes, and lens character (e.g. "shot on
+        an 85mm portrait lens, shallow depth of field") so the model renders a
+        photoreal face rather than a painted or airbrushed one.
         End with: "(for AI image generation, upload-ready, character reference)".
 
-        Each "prompts" entry:
-        - prompt: vivid, single-scene visual description. Explicitly name the characters shown.
+        Each "prompts" entry — build it like a director's shot list, not a plot summary:
+        - Pick the single most charged MOMENT from the scene, not the whole scene —
+          the instant right before or right after something irreversible happens
+          (a hand reaching for a door, a letter catching fire, a look exchanged
+          across a room). Freeze it there.
+        - Specify a CAMERA ANGLE and shot type (low-angle hero shot, extreme close-up
+          on hands/eyes, wide establishing shot with the character small in frame,
+          over-the-shoulder, dutch tilt for unease, etc.) — choose the one that
+          amplifies the emotion of the moment.
+        - Specify LIGHTING and mood explicitly (harsh backlight and long shadows,
+          candle-lit chiaroscuro, cold blue moonlight, warm practical lamp glow,
+          overcast diffused light for melancholy) — never leave lighting generic.
+        - Specify texture and realism cues: skin pores, fabric weave, weather on
+          the skin, film grain, realistic proportions — steer away from "airbrushed"
+          or "illustrated" results.
+        - Reserve visual NEGATIVE SPACE in the composition (state explicitly: "top
+          third of frame left open, uncluttered sky/wall" or "bottom third open,
+          out-of-focus foreground") so a text caption can be overlaid without
+          covering the subject. Match this to text_overlay_placement below.
+        - Explicitly name the characters shown, using the exact names from the
+          "characters" array.
+
+        - prompt: the full cinematic shot description assembled from the rules above.
         - character_names: array of character name strings.
-        - pinterest_title: punchy, scroll-stopping title (under 100 chars).
-        - pinterest_description: 1-2 sentence description packed with trending search 
-        catch phrases and hashtags relevant to this story's genre.
+        - text_overlay: a short (under 12 words) line of text meant to be rendered
+          or captioned onto the image itself to hook a scroller into clicking through.
+          Pull it from the story's own dialogue, an internal thought, or phrase it as
+          a curiosity-gap question or unfinished sentence ("She wasn't supposed to
+          open that door." / "He knew her secret. She didn't know he knew."). It
+          should create tension or an open loop, not summarize the plot.
+        - text_overlay_placement: one of "top", "bottom", or "center-scrim" — must
+          match the negative space described in the prompt.
+        - pinterest_title: punchy, scroll-stopping title (under 100 chars), written
+          like a hook, not a caption (lead with tension, a question, or a stake —
+          avoid flatly naming what's in the image).
+        - pinterest_description: 1-2 sentences packed with trending search catch
+          phrases and hashtags relevant to this story's genre, written to make
+          someone stop scrolling and want the rest of the story.
         INSTRUCTIONS;
     }
 
@@ -99,6 +137,8 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                     $schema->object(fn (JsonSchema $s) => [
                         'prompt' => $s->string()->required(),
                         'character_names' => $s->array()->items($s->string())->required(),
+                        'text_overlay' => $s->string()->required(),
+                        'text_overlay_placement' => $s->string()->enum(['top', 'bottom', 'center-scrim'])->required(),
                         'pinterest_title' => $s->string()->required(),
                         'pinterest_description' => $s->string()->required(),
                     ])
@@ -106,6 +146,4 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                 ->required(),
         ];
     }
-
-    
 }
