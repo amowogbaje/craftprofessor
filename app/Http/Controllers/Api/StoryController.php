@@ -23,6 +23,7 @@ class StoryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'text' => ['required', 'string', 'min:50'],
+            'story_link' => ['nullable', 'string', 'url', 'max:2048'],
         ]);
 
         if ($validator->fails()) {
@@ -33,6 +34,7 @@ class StoryController extends Controller
             'user_id' => $request->user()->id,
             'user_supplied_text' => $request->input('text'),
             'story_text' => $request->input('text'), // treat identically to a fetched story
+            'story_link' => $request->input('story_link'),
         ]);
 
         return response()->json(['message' => 'Story submitted for processing.', 'story' => $story], 201);
