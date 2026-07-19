@@ -69,6 +69,26 @@ class PinterestService
         return $items[0]['id'];
     }
 
+    public function getLastBoardId(int $sampleSize = 100): string
+    {
+        $this->requireAuth();
+        $this->requireScope('boards:read');
+
+        $boards = $this->listBoards($sampleSize);
+        $items = $boards['items'] ?? [];
+
+        if (empty($items)) {
+            throw new RuntimeException('No Pinterest boards found for this account.');
+        }
+
+        // Don't trust API ordering — sort by created_at (if present) and take
+        // the newest. Falls back to the last item in the response if Pinterest
+        // doesn't return a created_at field for some reason.
+        usort($items, fn ($a, $b) => ($b['created_at'] ?? '') <=> ($a['created_at'] ?? ''));
+
+        return $items[0]['id'];
+    }
+
     public static function forAccount(SocialAccount $account): self
     {
         $service = new self($account->access_token, $account->meta['default_board_id'] ?? null);
