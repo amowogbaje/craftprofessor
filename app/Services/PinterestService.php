@@ -396,7 +396,7 @@ class PinterestService
 
         $response = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl()}/pins", [
-                'board_id' => $this->getFirstBoardId(),
+                'board_id' => $this->getLastBoardId(),
                 'title' => $title,
                 'description' => $description,
                 'link' => $link,
