@@ -25,6 +25,7 @@ return new class extends AiMigration
         });
 
         Schema::create($messagesTable, function (Blueprint $table) {
+            $table->engine = 'InnoDB';
             $table->string('id', 36)->primary();
             $table->string('conversation_id', 36)->index();
             $table->foreignId('user_id')->nullable();

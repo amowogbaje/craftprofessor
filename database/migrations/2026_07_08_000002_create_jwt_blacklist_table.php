@@ -9,6 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('jwt_blacklist', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
             $table->id();
             $table->string('jti')->unique(); // the token's unique id (JWT 'jti' claim)
             $table->timestamp('expires_at'); // copy of the token's own expiry — row can be pruned after this
