@@ -85,7 +85,9 @@ class PinterestService
         // the newest. Falls back to the last item in the response if Pinterest
         // doesn't return a created_at field for some reason.
         usort($items, fn ($a, $b) => ($b['created_at'] ?? '') <=> ($a['created_at'] ?? ''));
-
+        Log::info('PinterestService: get last board id', [
+            'board_id' => $items[0]['id'],
+        ]);
         return $items[0]['id'];
     }
 
