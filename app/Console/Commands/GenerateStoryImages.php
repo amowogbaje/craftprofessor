@@ -31,11 +31,11 @@ class GenerateStoryImages extends Command
         $timeBudget = (int) $this->option('time-budget');
         $limit = (int) $this->option('limit');
 
-        $costCap = config('images.daily_cost_cap_cents');
-        $spentToday = $this->costGeneratedTodayCents();
+        $imageCap = config('images.daily_image_cap');
+        $spentToday = $this->imagesGeneratedToday();
 
-        if ($spentToday >= $costCap) {
-            $this->info("Daily cost cap reached ({$spentToday}/{$costCap} cents).");
+        if ($spentToday >= $imageCap) {
+            $this->info("Daily cost cap reached ({$spentToday}/{$imageCap} cents).");
             return self::SUCCESS;
         }
 
@@ -47,7 +47,7 @@ class GenerateStoryImages extends Command
                 break;
             }
 
-            if ($this->costGeneratedTodayCents() >= $costCap) {
+            if ($this->imagesGeneratedToday() >= $imageCap) {
                 $this->info('Cost cap hit mid-run, stopping.');
                 break;
             }
@@ -80,7 +80,7 @@ class GenerateStoryImages extends Command
         return self::SUCCESS;
     }
 
-    protected function costGeneratedTodayCents(): int
+    protected function imagesGeneratedToday(): int
     {
         $today = [Carbon::today(), Carbon::tomorrow()];
 
