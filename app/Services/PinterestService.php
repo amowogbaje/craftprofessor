@@ -53,6 +53,22 @@ class PinterestService
         return self::forAccount($account);
     }
 
+    public function getFirstBoardId(): string
+    {
+        $this->requireAuth();
+        $this->requireScope('boards:read');
+
+        $boards = $this->listBoards(1); // page_size = 1, we only need the first
+
+        $items = $boards['items'] ?? [];
+
+        if (empty($items)) {
+            throw new RuntimeException('No Pinterest boards found for this account.');
+        }
+
+        return $items[0]['id'];
+    }
+
     public static function forAccount(SocialAccount $account): self
     {
         $service = new self($account->access_token, $account->meta['default_board_id'] ?? null);
@@ -335,6 +351,18 @@ class PinterestService
         return $pinId;
     }
 
+    public function postPinToFirstBoard(StoryImagePrompt $imagePrompt): string
+    {
+        $this->boardId = $this->getFirstBoardId();
+
+        Log::info('PinterestService: resolved first board for pin', [
+            'story_image_prompt_id' => $imagePrompt->id,
+            'board_id' => $this->boardId,
+        ]);
+
+        return $this->postPin($imagePrompt);
+    }
+
     public function postLocalImagePin(string $title, string $description, string $link, string $imagePath): string
     {
         $this->requireAuth();
@@ -348,7 +376,7 @@ class PinterestService
 
         $response = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl()}/pins", [
-                'board_id' => $this->boardId,
+                'board_id' => $this->getFirstBoardId(),
                 'title' => $title,
                 'description' => $description,
                 'link' => $link,

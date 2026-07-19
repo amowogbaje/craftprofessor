@@ -13,8 +13,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
 
-            $table->unsignedInteger('daily_image_limit')->default(3);
-            $table->unsignedInteger('daily_video_limit')->default(1);
+            $table->unsignedInteger('daily_image_limit')->default(10);
+            $table->unsignedInteger('daily_video_limit')->default(3);
 
             // Optional hard ceilings independent of coin balance (0 = unlimited, only coins gate it).
             $table->unsignedInteger('monthly_image_limit')->nullable();

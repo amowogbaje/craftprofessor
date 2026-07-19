@@ -10,7 +10,7 @@ Schedule::command('story:generate-image-prompts')
     ->withoutOverlapping();
 
 // Scheduler 2: generate up to 3 images/day — every 15 min, active for a 4-hour window
-Schedule::command('story:generate-images --limit=10 --time-budget=50')
+Schedule::command('story:generate-images --limit=5 --time-budget=50')
     ->everyFifteenMinutes()
     // ->between('08:00', '12:00') // 4-hour window — adjust to taste
     ->withoutOverlapping(10)

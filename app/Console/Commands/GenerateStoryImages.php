@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
 class GenerateStoryImages extends Command
 {
     protected $signature = 'story:generate-images 
-        {--limit=25 : Max images to generate this run}
+        {--limit=5 : Max images to generate this run}
         {--time-budget=50 : Max seconds this run should take}';
 
     public function handle(ImageGeneratorService $service): int
