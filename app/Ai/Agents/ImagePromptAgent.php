@@ -151,30 +151,4 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
         return [];
     }
 
-    public function schema(JsonSchema $schema): array
-    {
-        return [
-            'characters' => $schema->array()
-                ->items(
-                    $schema->object(fn (JsonSchema $s) => [
-                        'name' => $s->string()->required(),
-                        'image_prompt' => $s->string()->nullable(),
-                    ])
-                )
-                ->required(),
-
-            'prompts' => $schema->array()
-                ->min(10)->max(10)
-                ->items(
-                    $schema->object(fn (JsonSchema $s) => [
-                        'prompt' => $s->string()->required(),
-                        'character_names' => $s->array()->items($s->string())->required(),
-                        'caption' => $s->string()->required(),
-                        'pinterest_title' => $s->string()->required(),
-                        'pinterest_description' => $s->string()->required(),
-                    ])
-                )
-                ->required(),
-        ];
-    }
 }
