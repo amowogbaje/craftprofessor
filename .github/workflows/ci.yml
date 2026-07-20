@@ -43,8 +43,8 @@ jobs:
           script: |
             cd /home/${{ vars.USERNAME }}/craftprofessor.amowogbaje.com
             # composer install --no-dev --optimize-autoloader --no-scripts
-            composer dump-autoload --optimize --no-dev
+            # composer dump-autoload --optimize --no-dev
             php artisan migrate --force
-            php artisan optimize:clear
+            # php artisan optimize:clear
             # php artisan optimize
             # chmod -R 777 storage bootstrap/cache

@@ -7,7 +7,7 @@ use App\Services\PinterestService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-class SyncBoardIds extends Command
+class PinterestSyncBoardIds extends Command
 {
     protected $signature = 'pinterest:sync-board-ids
         {--force : Re-sync accounts that already have a board_id}
