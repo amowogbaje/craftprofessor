@@ -52,6 +52,40 @@ class PinterestService
 
         return self::forAccount($account);
     }
+    public function createBoard(string $name, ?string $description = null, string $privacy = 'PUBLIC'): array
+    {
+        $this->requireAuth();
+        $this->requireScope('boards:write');
+
+        Log::channel('pinterest')->info('PinterestService: creating board', [
+            'environment' => $this->environment,
+            'name' => $name,
+        ]);
+
+        $response = Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post("{$this->baseUrl()}/boards", array_filter([
+                'name' => $name,
+                'description' => $description,
+                'privacy' => $privacy,
+            ]));
+
+        if ($response->failed()) {
+            Log::channel('pinterest')->error('PinterestService: board creation failed', [
+                'environment' => $this->environment,
+                'status' => $response->status(),
+                'body' => Str::limit($response->body(), 1000),
+            ]);
+            throw new RuntimeException("Pinterest board creation failed: {$response->body()}");
+        }
+
+        Log::channel('pinterest')->info('PinterestService: board created', [
+            'environment' => $this->environment,
+            'board_id' => $response->json('id'),
+        ]);
+
+        return $response->json();
+    }
 
     public function getFirstBoardId(): string
     {
@@ -69,7 +103,7 @@ class PinterestService
         return $items[0]['id'];
     }
 
-    public function getLastBoardId(int $sampleSize = 100): string
+    public function getLastBoardId(int $sampleSize = 100, bool $createIfMissing = true): string
     {
         $this->requireAuth();
         $this->requireScope('boards:read');
@@ -78,22 +112,51 @@ class PinterestService
         $items = $boards['items'] ?? [];
 
         if (empty($items)) {
-            throw new RuntimeException('No Pinterest boards found for this account.');
+            if (!$createIfMissing) {
+                throw new RuntimeException('No Pinterest boards found for this account.');
+            }
+
+            Log::channel('pinterest')->info('PinterestService: no boards found, creating a default one');
+
+            $created = $this->createBoard(
+                config('services.pinterest.default_board_name', 'Storyframe'),
+                config('services.pinterest.default_board_description'),
+            );
+
+            return $created['id'];
         }
 
-        // Don't trust API ordering — sort by created_at (if present) and take
-        // the newest. Falls back to the last item in the response if Pinterest
-        // doesn't return a created_at field for some reason.
         usort($items, fn ($a, $b) => ($b['created_at'] ?? '') <=> ($a['created_at'] ?? ''));
-        Log::info('PinterestService: get last board id', [
+
+        Log::channel('pinterest')->info('PinterestService: resolved last board id', [
             'board_id' => $items[0]['id'],
         ]);
+
         return $items[0]['id'];
+    }
+
+    public function syncBoardToAccount(): string
+    {
+        if (!$this->account) {
+            throw new RuntimeException('syncBoardToAccount() requires a service built via forAccount()/forUser().');
+        }
+
+        $boardId = $this->getLastBoardId();
+
+        $this->account->update(['board_id' => $boardId]);
+        $this->boardId = $boardId;
+
+        Log::channel('pinterest')->info('PinterestService: synced board id to social account', [
+            'user_id' => $this->account->user_id,
+            'board_id' => $boardId,
+        ]);
+
+        return $boardId;
     }
 
     public static function forAccount(SocialAccount $account): self
     {
-        $service = new self($account->access_token, $account->meta['default_board_id'] ?? null);
+        $service = new self($account->access_token,  $account->board_id ?? $account->meta['default_board_id'] ?? null);
         $service->account = $account;
 
         return $service;
@@ -202,7 +265,7 @@ class PinterestService
         $clientSecret = config('services.pinterest.client_secret');
         $redirectUri = config('services.pinterest.redirect_uri');
 
-        Log::info('PinterestService: token exchange attempt', [
+        Log::channel('pinterest')->info('PinterestService: token exchange attempt', [
             'environment' => $this->environment,
             'client_id' => $clientId,
             'client_secret_length' => strlen((string) $clientSecret),
@@ -220,7 +283,7 @@ class PinterestService
             ]);
 
         if ($response->failed()) {
-            Log::error('PinterestService: token exchange failed', [
+            Log::channel('pinterest')->error('PinterestService: token exchange failed', [
                 'environment' => $this->environment,
                 'status' => $response->status(),
                 'body' => Str::limit($response->body(), 1000),
@@ -233,6 +296,9 @@ class PinterestService
 
     public function refreshAccessToken(string $refreshToken): array
     {
+        Log::channel('pinterest')->info('PinterestService: refreshing access token', [
+            'environment' => $this->environment,
+        ]);
         $response = Http::asForm()
             ->withBasicAuth(
                 config('services.pinterest.client_id'),
@@ -244,8 +310,17 @@ class PinterestService
             ]);
 
         if ($response->failed()) {
+            Log::channel('pinterest')->error('PinterestService: token refresh failed', [
+                'environment' => $this->environment,
+                'status' => $response->status(),
+                'body' => Str::limit($response->body(), 1000),
+            ]);
             throw new RuntimeException("Pinterest token refresh failed: {$response->body()}");
         }
+
+        Log::channel('pinterest')->info('PinterestService: token refreshed successfully', [
+            'environment' => $this->environment,
+        ]);
 
         return $response->json();
     }
@@ -303,7 +378,7 @@ class PinterestService
             ->get("{$this->baseUrl()}{$endpoint}", $query);
 
         if ($response->failed()) {
-            Log::error('PinterestService: GET failed', [
+            Log::channel('pinterest')->error('PinterestService: GET failed', [
                 'environment' => $this->environment,
                 'endpoint' => $endpoint,
                 'status' => $response->status(),
@@ -312,7 +387,7 @@ class PinterestService
             throw new RuntimeException("Pinterest GET {$endpoint} failed ({$response->status()}): {$response->body()}");
         }
 
-        Log::info('PinterestService: GET success', [
+        Log::channel('pinterest')->info('PinterestService: GET success', [
             'environment' => $this->environment,
             'endpoint' => $endpoint,
             'status' => $response->status(),
@@ -329,7 +404,7 @@ class PinterestService
     {
         $this->requireAuth();
 
-        Log::info('PinterestService: posting pin', [
+        Log::channel('pinterest')->info('PinterestService: posting pin', [
             'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
             'board_id' => $this->boardId,
@@ -349,7 +424,7 @@ class PinterestService
             ]);
 
         if ($response->failed()) {
-            Log::error('PinterestService: pin creation failed', [
+            Log::channel('pinterest')->error('PinterestService: pin creation failed', [
                 'environment' => $this->environment,
                 'story_image_prompt_id' => $imagePrompt->id,
                 'status' => $response->status(),
@@ -364,7 +439,7 @@ class PinterestService
             throw new RuntimeException('Pinterest response did not include a pin id.');
         }
 
-        Log::info('PinterestService: pin posted', [
+        Log::channel('pinterest')->info('PinterestService: pin posted', [
             'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
             'pin_id' => $pinId,
@@ -377,7 +452,7 @@ class PinterestService
     {
         $this->boardId = $this->getFirstBoardId();
 
-        Log::info('PinterestService: resolved first board for pin', [
+        Log::channel('pinterest')->info('PinterestService: resolved first board for pin', [
             'story_image_prompt_id' => $imagePrompt->id,
             'board_id' => $this->boardId,
         ]);

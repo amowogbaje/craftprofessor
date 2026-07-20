@@ -60,6 +60,20 @@ class SocialAccountController extends Controller
             $account->update(['provider_username' => $userAccount['username'] ?? null]);
         } catch (\Throwable $e) {
             // non-fatal — account is connected even if this enrichment call fails
+            Log::channel('pinterest')->warning('PinterestService: failed to fetch user account after connect', [
+                'user_id' => $account->user_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+        try {
+            PinterestService::forAccount($account)->syncBoardToAccount();
+        } catch (\Throwable $e) {
+            // non-fatal — account is connected even if board resolution/creation fails;
+            // postPin() can retry board resolution later
+            Log::channel('pinterest')->warning('PinterestService: failed to sync board after connect', [
+                'user_id' => $account->user_id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return redirect(config('app.frontend_url') . '/settings/social-accounts?connected=pinterest');

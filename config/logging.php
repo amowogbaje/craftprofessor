@@ -72,6 +72,13 @@ return [
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
+
+        'pinterest' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/pinterest/pinterest.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
         
         'story_agent' => [
             'driver' => 'daily',
