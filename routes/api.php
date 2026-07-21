@@ -66,6 +66,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/dashboard/feed', [DashboardController::class, 'feed']);
     Route::patch('/dashboard/images/{imagePrompt}', [DashboardController::class, 'updateImage']);
     Route::patch('/dashboard/videos/{video}', [DashboardController::class, 'updateVideo']);
+    Route::delete('/dashboard/media', [DashboardController::class, 'deleteMedia']);
 
     // Video generation (image -> video)
     Route::post('/story-image-prompts/{imagePrompt}/video', [VideoController::class, 'store']);

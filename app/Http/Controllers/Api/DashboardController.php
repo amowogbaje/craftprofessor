@@ -42,6 +42,7 @@ class DashboardController extends Controller
                 id,
                 'image' as type,
                 image_generated_url as url,
+                pinterest_pin_id,
                 prompt,
                 status,
                 scheduled_at,
@@ -84,6 +85,7 @@ class DashboardController extends Controller
                 scheduled_at,
                 published_at,
                 NULL as story_id,
+                NULL as pinterest_pin_id,
                 story_image_prompt_id as source_image_prompt_id,
                 NULL as has_video,
                 COALESCE(generated_at, created_at) as sort_at
@@ -211,5 +213,50 @@ class DashboardController extends Controller
             'scheduled_at' => $v->scheduled_at, 'published_at' => $v->published_at,
             'sort_at' => $v->generated_at ?? $v->created_at,
         ];
+    }
+
+    public function deleteMedia(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'type'        => ['required', 'string', 'in:image,video'],
+            'resource_id' => ['required', 'integer'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $type = $request->input('type');
+        $resourceId = $request->input('resource_id');
+        $userId = $request->user()->id;
+
+        if ($type === 'image') {
+            $record = StoryImagePrompt::where('id', $resourceId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (! $record) {
+                return response()->json(['message' => 'Image prompt not found.'], 404);
+            }
+
+            $record->delete();
+        } else {
+            $record = Video::where('id', $resourceId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (! $record) {
+                return response()->json(['message' => 'Video not found.'], 404);
+            }
+
+            $record->delete();
+        }
+
+        return response()->json([
+            'message' => ucfirst($type) . ' deleted successfully.',
+        ], 200);
     }
 }
