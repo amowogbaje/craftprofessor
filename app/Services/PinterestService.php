@@ -156,10 +156,68 @@ class PinterestService
 
     public static function forAccount(SocialAccount $account): self
     {
-        $service = new self($account->access_token,  $account->board_id ?? $account->meta['default_board_id'] ?? null);
+        $account = self::ensureFreshToken($account);
+
+        $service = new self($account->access_token, $account->board_id ?? $account->meta['default_board_id'] ?? null);
         $service->account = $account;
 
         return $service;
+    }
+
+    /**
+     * Refresh the account's access token if it's expired or about to expire.
+     * Persists the new token/expiry back to the SocialAccount row and returns
+     * the (possibly updated) model so callers always see fresh data.
+     */
+    protected static function ensureFreshToken(SocialAccount $account): SocialAccount
+    {
+        // No expiry info (e.g. legacy row) or no refresh token — nothing we can do, leave as-is.
+        if (!$account->token_expires_at || !$account->refresh_token) {
+            return $account;
+        }
+
+        $buffer = now()->addMinutes(5);
+
+        if ($account->token_expires_at->gt($buffer)) {
+            return $account; // still valid for a while, no refresh needed
+        }
+
+        Log::channel('pinterest')->info('PinterestService: access token expired or near-expiry, refreshing', [
+            'user_id' => $account->user_id,
+            'expires_at' => $account->token_expires_at,
+        ]);
+
+        // Build a throwaway service purely to reuse the token endpoint logic.
+        $service = new self();
+
+        try {
+            $token = $service->refreshAccessToken($account->refresh_token);
+        } catch (\Throwable $e) {
+            Log::channel('pinterest')->error('PinterestService: automatic token refresh failed', [
+                'user_id' => $account->user_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Return the stale account — the caller's eventual API call will fail
+            // with a clear 401 rather than us throwing here mid-refresh.
+            return $account;
+        }
+
+        $account->update([
+            'access_token' => $token['access_token'],
+            // Pinterest may or may not rotate the refresh token — keep the old one if absent.
+            'refresh_token' => $token['refresh_token'] ?? $account->refresh_token,
+            'token_expires_at' => isset($token['expires_in'])
+                ? now()->addSeconds($token['expires_in'])
+                : $account->token_expires_at,
+        ]);
+
+        Log::channel('pinterest')->info('PinterestService: token refreshed automatically', [
+            'user_id' => $account->user_id,
+            'new_expires_at' => $account->token_expires_at,
+        ]);
+
+        return $account->fresh();
     }
 
     // ---------------------------------------------------------------
