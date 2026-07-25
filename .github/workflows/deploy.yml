@@ -1,0 +1,131 @@
+name: Deploy CraftProfessor
+
+# One repo, two sites. Each job only runs when its half of the repo
+# actually changed (or on manual dispatch, which can target either or
+# both) so an unrelated frontend commit doesn't trigger a pointless
+# backend deploy and vice versa.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_frontend:
+        description: 'Deploy frontend'
+        type: boolean
+        default: true
+      deploy_backend:
+        description: 'Deploy backend'
+        type: boolean
+        default: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+
+  deploy-frontend:
+    needs: changes
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.deploy_frontend ||
+      github.event_name == 'push' && needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Project
+        env:
+          VITE_BASE_URL: ${{ vars.VITE_BASE_URL }}
+        run: npm run build
+
+      - name: Deploy dist folder
+        env:
+          HOST: ${{ vars.HOST }}
+          USERNAME: ${{ vars.USERNAME }}
+          PORT: ${{ vars.PORT }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/private_key
+          chmod 600 /tmp/private_key
+
+          rsync -avz --delete \
+            -e "ssh -i /tmp/private_key -o StrictHostKeyChecking=no -p $PORT" \
+            dist/ \
+            $USERNAME@$HOST:/home/$USERNAME/craftprofessorui.amowogbaje.com/
+
+  deploy-backend:
+    needs: changes
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.deploy_backend ||
+      github.event_name == 'push' && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Deploy application via rsync
+        env:
+          host: ${{ vars.HOST }}
+          username: ${{ vars.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ vars.PORT }}
+        run: |
+          echo "$key" > /tmp/private_key
+          chmod 600 /tmp/private_key
+          rsync -avz -e "ssh -i /tmp/private_key -o StrictHostKeyChecking=no -p $port" \
+            --exclude='.env' --exclude='node_modules' --exclude='storage' ./ \
+            $username@$host:/home/$username/craftprofessor.amowogbaje.com
+
+      - name: Run post-deploy commands on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.HOST }}
+          username: ${{ vars.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ vars.PORT }}
+          script: |
+            cd /home/${{ vars.USERNAME }}/craftprofessor.amowogbaje.com
+            # composer install --no-dev --optimize-autoloader --no-scripts
+            # composer dump-autoload --optimize --no-dev
+            php artisan migrate --force
+            # php artisan optimize:clear
+            # php artisan optimize
+            # chmod -R 777 storage bootstrap/cache

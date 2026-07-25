@@ -1,58 +1,69 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CraftProfessor
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Monorepo combining what used to be two separate repos:
 
-## About Laravel
+- `frontend/` — formerly `craftprofessorui` (React + Vite + TypeScript)
+- `backend/` — formerly `social-media-asst` (Laravel)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Both deploy from this one repo via `.github/workflows/deploy.yml`, which
+runs two independent jobs — `deploy-frontend` and `deploy-backend` — each
+only triggered when its own folder changed (via `dorny/paths-filter`), so a
+backend-only commit doesn't rebuild/redeploy the frontend and vice versa.
+You can also force either or both from the Actions tab via
+"Run workflow" (`workflow_dispatch`).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Merging your existing two repos into this one, with history intact
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Since each side already has its own git history you care about, don't just
+copy files over — use `git subtree` (or `git filter-repo`) from a fresh
+repo so both histories are preserved under their new subfolders:
 
 ```bash
-composer require laravel/boost --dev
+mkdir craftprofessor && cd craftprofessor
+git init
 
-php artisan boost:install
+git remote add frontend-origin <url-to-craftprofessorui-repo>
+git fetch frontend-origin
+git merge --allow-unrelated-histories -m "Merge craftprofessorui as frontend/" frontend-origin/main
+mkdir frontend
+git mv $(git ls-tree --name-only frontend-origin/main) frontend/
+# (repeat mv for any files git couldn't auto-detect, then commit)
+
+git remote add backend-origin <url-to-social-media-asst-repo>
+git fetch backend-origin
+git merge --allow-unrelated-histories -m "Merge social-media-asst as backend/" backend-origin/main
+mkdir backend
+git mv $(git ls-tree --name-only backend-origin/main) backend/
+git commit -m "Move social-media-asst into backend/"
+
+# Drop in the merged .github/workflows/deploy.yml from this folder,
+# remove the old frontend/.github and backend/.github workflow files
+# (already done in this delivered copy), and push.
+git remote add origin <url-to-new-monorepo>
+git push -u origin main
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+If you'd rather not fuss with history, the simplest path is: pick one of
+the two existing repos as the new home, `git mv` its own contents into
+`frontend/` or `backend/` as appropriate, then copy the other project's
+files in under the other folder as a fresh, un-historied add.
 
-## Contributing
+## Required GitHub repo configuration
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Both jobs currently reuse the **same** `HOST` / `USERNAME` / `PORT`
+repo variables and the same `SSH_PRIVATE_KEY` secret that the two original
+workflows used — this assumes both `craftprofessor.amowogbaje.com` and
+`craftprofessorui.amowogbaje.com` live under the same Namecheap/cPanel
+account. If they don't, split these into e.g. `FRONTEND_HOST`/`BACKEND_HOST`
+in the workflow and add the corresponding repo variables.
 
-## Code of Conduct
+You'll also still need `VITE_API_URL` (repo variable) for the frontend
+build step, exactly as before.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## New in this pass
 
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- `backend`: StoryVerse series import (`POST /api/story-series/import-storyverse`,
+  `php artisan story:import-storyverse`) — see `docs/storyverse-import-contract.md`.
+- `backend`: tracked outbound links + click stats (`GET /r`, `GET /api/link-stats`).
+- `frontend`: `/series` (StoryVerse import UI) and `/stats` (click analytics) pages,
+  both re-enabled/added in the sidebar nav.
