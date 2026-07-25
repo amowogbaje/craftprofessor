@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\InvalidStoryVerseUrlException;
+use App\Exceptions\StoryVerseStoryNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreStoryVerseImportRequest;
 use App\Services\StoryVerseImportService;
@@ -21,6 +23,13 @@ class StoryVerseImportController extends Controller
     {
         try {
             $series = $service->importFromInput($request->validated('url'), $request->user());
+        } catch (InvalidStoryVerseUrlException $e) {
+            // The pasted input isn't a slug and doesn't match the expected
+            // https://storyverse.amowogbaje.com/stories/{slug} shape.
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (StoryVerseStoryNotFoundException $e) {
+            // Well-formed link/slug, but StoryVerse has no such story.
+            return response()->json(['message' => $e->getMessage()], 404);
         } catch (\Throwable $e) {
             Log::error('StoryVerseImportController: import failed', [
                 'error' => $e->getMessage(),

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Exceptions\InvalidStoryVerseUrlException;
+use App\Exceptions\StoryVerseStoryNotFoundException;
 use App\Models\Story;
 use App\Models\StorySeries;
 use App\Models\User;
@@ -15,13 +17,14 @@ use RuntimeException;
  * Imports a StoryVerse story (and every other episode in its series) via
  * StoryVerse's read-only JSON endpoint:
  *
- *   GET {STORYVERSE_BASE_URL}/stories/{slug}/json
+ *   GET {STORYVERSE_BASE_URL}/api/stories/{slug}/json
  *
  * The person only ever hands us the public story URL (or its slug) —
  * e.g. https://storyverse.amowogbaje.com/stories/shadow-of-the-sentinel-2-the-call-beyond-the-veil.
- * We hit the sibling /json endpoint for that slug, which is expected to
- * return the *entire* series (every episode, not just the one requested)
- * so a single import call seeds/updates the whole series in one shot.
+ * We hit the /api/stories/{slug}/json endpoint for that slug, which is
+ * expected to return the *entire* series (every episode, not just the one
+ * requested) so a single import call seeds/updates the whole series in one
+ * shot.
  *
  * Expected response shape — see docs/storyverse-import-contract.md for the
  * full spec:
@@ -50,6 +53,13 @@ use RuntimeException;
  * episode) is safe: series are matched on (source, source_slug) and
  * episodes are matched on their unique story_link, so existing rows are
  * updated in place rather than duplicated.
+ *
+ * Throws two distinct, catchable exceptions so callers can show a
+ * meaningful message rather than a generic failure:
+ *  - InvalidStoryVerseUrlException: the pasted input isn't a bare slug and
+ *    doesn't look like https://storyverse.amowogbaje.com/stories/{slug}.
+ *  - StoryVerseStoryNotFoundException: the input was a well-formed
+ *    slug/URL, but StoryVerse returned 404 for it.
  */
 class StoryVerseImportService
 {
@@ -61,32 +71,65 @@ class StoryVerseImportService
         return $this->upsert($payload, $user);
     }
 
-    /** Accepts either a bare slug or a full StoryVerse story URL. */
+    /**
+     * Accepts either a bare slug (e.g. "shadow-of-the-sentinel-1-the-awakening")
+     * or a full StoryVerse story URL
+     * (https://storyverse.amowogbaje.com/stories/{slug}). Anything else —
+     * a URL on the wrong host, or missing the /stories/ path — is rejected
+     * with a specific, actionable error rather than silently guessing.
+     */
     protected function extractSlug(string $input): string
     {
         $input = trim($input);
+        $expectedHost = parse_url((string) config('services.storyverse.base_url'), PHP_URL_HOST);
+        $example = "https://{$expectedHost}/stories/{slug}";
 
         if (!Str::startsWith($input, ['http://', 'https://'])) {
-            return trim($input, '/');
+            $slug = trim($input, '/');
+
+            if ($slug === '') {
+                throw new InvalidStoryVerseUrlException(
+                    "That doesn't look like a StoryVerse story link or slug. Paste either the full story URL ({$example}) or just its slug."
+                );
+            }
+
+            return $slug;
         }
 
-        $path = parse_url($input, PHP_URL_PATH) ?? '';
+        $host = parse_url($input, PHP_URL_HOST);
+        $path = rtrim(parse_url($input, PHP_URL_PATH) ?? '', '/');
 
-        return trim((string) Str::afterLast(rtrim($path, '/'), '/'));
+        if (!$host || !$expectedHost || strcasecmp($host, $expectedHost) !== 0 || !Str::startsWith($path, '/stories/')) {
+            throw new InvalidStoryVerseUrlException(
+                "That link doesn't match the expected StoryVerse story URL format ({$example}). Please paste a link that looks like {$example}."
+            );
+        }
+
+        $slug = trim((string) Str::afterLast($path, '/'));
+
+        if ($slug === '' || $slug === 'stories') {
+            throw new InvalidStoryVerseUrlException(
+                "Couldn't find a story slug in that link. Please paste a link that looks like {$example}."
+            );
+        }
+
+        return $slug;
     }
 
     protected function fetch(string $slug): array
     {
-        if ($slug === '') {
-            throw new RuntimeException('Could not determine a StoryVerse slug from the given input.');
-        }
-
         $base = rtrim((string) config('services.storyverse.base_url'), '/');
-        $url = "{$base}/stories/{$slug}/json";
+        $url = "{$base}/api/stories/{$slug}/json";
 
         Log::info('StoryVerseImportService: fetching series JSON', ['slug' => $slug, 'url' => $url]);
 
         $response = Http::timeout(20)->acceptJson()->get($url);
+
+        if ($response->status() === 404) {
+            Log::warning('StoryVerseImportService: story not found', ['slug' => $slug, 'url' => $url]);
+
+            throw new StoryVerseStoryNotFoundException("No story could be found on StoryVerse for \"{$slug}\".");
+        }
 
         if ($response->failed()) {
             Log::error('StoryVerseImportService: fetch failed', [

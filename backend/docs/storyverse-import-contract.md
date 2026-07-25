@@ -4,7 +4,7 @@ CraftProfessor imports a series (and every episode in it) by calling a
 read-only JSON endpoint that must exist on StoryVerse, one per story slug:
 
 ```
-GET https://storyverse.amowogbaje.com/stories/{slug}/json
+GET https://storyverse.amowogbaje.com/api/stories/{slug}/json
 ```
 
 `{slug}` is exactly the last path segment of a normal StoryVerse story URL —
@@ -13,7 +13,7 @@ the slug is `shadow-of-the-sentinel-2-the-call-beyond-the-veil`, and CraftProfes
 requests:
 
 ```
-https://storyverse.amowogbaje.com/stories/shadow-of-the-sentinel-2-the-call-beyond-the-veil/json
+https://storyverse.amowogbaje.com/api/stories/shadow-of-the-sentinel-2-the-call-beyond-the-veil/json
 ```
 
 **Important:** regardless of which episode's slug is requested, respond with
@@ -68,10 +68,25 @@ one request bulk-seed (or refresh) the whole series in a single call.
 | `episodes[].content` | no, but should be present when available | Full story text. If present and different from what's already stored, CraftProfessor updates `story_text`; if absent/empty, CraftProfessor leaves any existing text alone (so you can add episodes with metadata now and backfill content later). |
 | `episodes[].published_at` | no | ISO 8601. Stored as `stories.published_at`. |
 
-### Error cases
+### Input validation on the CraftProfessor side
 
-- Unknown slug → `404` with `{ "message": "Story not found." }`.
-- Any other failure → non-2xx status; CraftProfessor logs the response body and surfaces a generic import error to the user (it does not retry automatically).
+The person pastes either a bare slug or a full story URL. Anything else —
+a URL on the wrong host, or missing the `/stories/` path segment — is
+rejected immediately with its own error message (HTTP 422), before any
+request is even made to StoryVerse:
+
+> That link doesn't match the expected StoryVerse story URL format
+> (`https://storyverse.amowogbaje.com/stories/{slug}`). Please paste a
+> link that looks like `https://storyverse.amowogbaje.com/stories/{slug}`.
+
+### Error cases from StoryVerse itself
+
+- Unknown slug → StoryVerse should respond `404` (body doesn't matter,
+  but `{ "message": "Story not found." }` is a reasonable shape).
+  CraftProfessor surfaces this to the person as its own distinct message:
+  > No story could be found on StoryVerse for "{slug}".
+- Any other non-2xx response → CraftProfessor logs the response body and
+  shows a generic import-failed error. It does not retry automatically.
 
 ### Idempotency / re-imports
 

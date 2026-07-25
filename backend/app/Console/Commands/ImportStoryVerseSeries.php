@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Exceptions\InvalidStoryVerseUrlException;
+use App\Exceptions\StoryVerseStoryNotFoundException;
 use App\Models\User;
 use App\Services\StoryVerseImportService;
 use Illuminate\Console\Command;
@@ -32,6 +34,12 @@ class ImportStoryVerseSeries extends Command
 
         try {
             $series = $service->importFromInput($this->argument('input'), $user);
+        } catch (InvalidStoryVerseUrlException $e) {
+            $this->error("Invalid input: {$e->getMessage()}");
+            return self::FAILURE;
+        } catch (StoryVerseStoryNotFoundException $e) {
+            $this->error("Not found: {$e->getMessage()}");
+            return self::FAILURE;
         } catch (\Throwable $e) {
             $this->error("Import failed: {$e->getMessage()}");
             return self::FAILURE;
