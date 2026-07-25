@@ -37,8 +37,8 @@ return [
     |
     */
     'packages' => [
-        ['coins' => 100, 'amount' => 1000, 'currency' => 'NGN', 'label' => 'Starter'],
-        ['coins' => 550, 'amount' => 5000, 'currency' => 'NGN', 'label' => 'Popular (+10% bonus)'],
-        ['coins' => 1200, 'amount' => 10000, 'currency' => 'NGN', 'label' => 'Pro (+20% bonus)'],
+        ['coins' => 100, 'amount' => 100000, 'currency' => 'NGN', 'label' => 'Starter'],
+        ['coins' => 550, 'amount' => 500000, 'currency' => 'NGN', 'label' => 'Popular (+10% bonus)'],
+        ['coins' => 1200, 'amount' => 1000000, 'currency' => 'NGN', 'label' => 'Pro (+20% bonus)'],
     ],
 ];
