@@ -119,7 +119,7 @@ class PinterestService
             Log::channel('pinterest')->info('PinterestService: no boards found, creating a default one');
 
             $created = $this->createBoard(
-                config('services.pinterest.default_board_name', 'Storyframe'),
+                config('services.pinterest.default_board_name', 'Craft Professor'),
                 config('services.pinterest.default_board_description'),
             );
 
@@ -130,6 +130,8 @@ class PinterestService
 
         Log::channel('pinterest')->info('PinterestService: resolved last board id', [
             'board_id' => $items[0]['id'],
+            'board_name' => $items[0]['name'] ?? null,
+            'created_at' => $items[0]['created_at'] ?? null,
         ]);
 
         return $items[0]['id'];
@@ -220,11 +222,7 @@ class PinterestService
         return $account->fresh();
     }
 
-    // ---------------------------------------------------------------
-    // Sandbox / production — controlled entirely via .env
-    // (PINTEREST_ENVIRONMENT=sandbox|production, see config/services.php)
-    // ---------------------------------------------------------------
-
+    
     public function isSandbox(): bool
     {
         return $this->environment === 'sandbox';
