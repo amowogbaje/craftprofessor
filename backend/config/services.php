@@ -45,6 +45,15 @@ return [
         'environment' => env('PINTEREST_ENVIRONMENT', 'production'), // "production" or "sandbox"
         'default_board_name' => env('PINTEREST_DEFAULT_BOARD_NAME', 'Storyframe'),
         'default_board_description' => env('PINTEREST_DEFAULT_BOARD_DESCRIPTION'),
+
+        // Hard cap on Pins posted per user per day, enforced by
+        // App\Console\Commands\PostPinterestPins itself (not just by how
+        // often it's scheduled) — see App\Models\StoryImagePrompt::scopeAwaitingPinterestPost().
+        'max_pins_per_user_per_day' => env('PINTEREST_MAX_PINS_PER_USER_PER_DAY', 5),
+        // Timezone the daily cap resets in. Should match the timezone
+        // Scheduler 3 runs in (routes/console.php) so "today" means the
+        // same thing in both places.
+        'daily_cap_timezone' => env('PINTEREST_DAILY_CAP_TIMEZONE', 'UTC'),
     ],
 
     'google' => [
@@ -61,10 +70,15 @@ return [
     ],
 
     'storyverse' => [
-        // Base URL of the StoryVerse site whose /stories/{slug}/json
-        // endpoint we import series/episodes from. See
-        // App\Services\StoryVerseImportService.
-        'base_url' => env('STORYVERSE_BASE_URL', 'https://storyverse.amowogbaje.com'),
+        // Base URL of the StoryVerse *API* (a separate host from the
+        // reader-facing site) whose /api/stories/{slug}/json endpoint we
+        // import series/episodes from. See App\Services\StoryVerseImportService.
+        'base_url' => env('STORYVERSE_BASE_URL', 'https://storyverseapi.amowogbaje.com'),
+
+        // The reader-facing site (storyverse.amowogbaje.com) whose
+        // /stories/{slug} URLs people actually paste into CraftProfessor.
+        // Used only to validate pasted links look right — NOT fetched from.
+        'reader_base_url' => env('STORYVERSE_READER_BASE_URL', 'https://storyverse.amowogbaje.com'),
     ],
 
     'link_tracking' => [

@@ -81,7 +81,7 @@ class StoryVerseImportService
     protected function extractSlug(string $input): string
     {
         $input = trim($input);
-        $expectedHost = parse_url((string) config('services.storyverse.base_url'), PHP_URL_HOST);
+        $expectedHost = parse_url((string) config('services.storyverse.reader_base_url'), PHP_URL_HOST);
         $example = "https://{$expectedHost}/stories/{slug}";
 
         if (!Str::startsWith($input, ['http://', 'https://'])) {
@@ -139,6 +139,23 @@ class StoryVerseImportService
             ]);
 
             throw new RuntimeException("StoryVerse import failed for slug [{$slug}]: HTTP {$response->status()}.");
+        }
+
+        if (!Str::contains($response->header('Content-Type') ?? '', 'json')) {
+            // A 200 with an HTML body almost always means the request hit
+            // a frontend SPA catch-all instead of the actual API route —
+            // e.g. wrong host, or the endpoint isn't registered/deployed
+            // yet on StoryVerse's side.
+            Log::error('StoryVerseImportService: non-JSON response', [
+                'slug' => $slug,
+                'url' => $url,
+                'content_type' => $response->header('Content-Type'),
+                'body' => Str::limit($response->body(), 500),
+            ]);
+
+            throw new RuntimeException(
+                "StoryVerse returned a webpage instead of JSON for [{$slug}] — the /api/stories/{slug}/json endpoint may not be deployed yet, or {$url} is hitting the wrong host."
+            );
         }
 
         $data = $response->json();
