@@ -70,14 +70,16 @@ return [
     ],
 
     'storyverse' => [
-        // Base URL of the StoryVerse *API* (a separate host from the
-        // reader-facing site) whose /api/stories/{slug}/json endpoint we
-        // import series/episodes from. See App\Services\StoryVerseImportService.
+        // The API host — CraftProfessor actually fetches
+        // /api/stories/{slug}/json from HERE. NOT what people paste.
+        // See App\Services\StoryVerseImportService::fetch().
         'base_url' => env('STORYVERSE_BASE_URL', 'https://storyverseapi.amowogbaje.com'),
 
-        // The reader-facing site (storyverse.amowogbaje.com) whose
-        // /stories/{slug} URLs people actually paste into CraftProfessor.
-        // Used only to validate pasted links look right — NOT fetched from.
+        // The reader-facing host — the story URLs people actually copy
+        // and paste look like https://{reader_base_url}/stories/{slug}.
+        // CraftProfessor only checks pasted links look right against
+        // THIS host; it never sends a request here.
+        // See App\Services\StoryVerseImportService::extractSlug().
         'reader_base_url' => env('STORYVERSE_READER_BASE_URL', 'https://storyverse.amowogbaje.com'),
     ],
 

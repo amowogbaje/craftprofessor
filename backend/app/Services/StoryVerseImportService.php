@@ -19,12 +19,14 @@ use RuntimeException;
  *
  *   GET {STORYVERSE_BASE_URL}/api/stories/{slug}/json
  *
- * The person only ever hands us the public story URL (or its slug) —
+ * The person only ever hands us the public story URL (or its slug) from
+ * the reader-facing site —
  * e.g. https://storyverse.amowogbaje.com/stories/shadow-of-the-sentinel-2-the-call-beyond-the-veil.
- * We hit the /api/stories/{slug}/json endpoint for that slug, which is
- * expected to return the *entire* series (every episode, not just the one
- * requested) so a single import call seeds/updates the whole series in one
- * shot.
+ * We extract the slug from that, then hit the *separate* API host's
+ * /api/stories/{slug}/json endpoint for that slug (services.storyverse.base_url,
+ * e.g. https://storyverseapi.amowogbaje.com), which is expected to return
+ * the *entire* series (every episode, not just the one requested) so a
+ * single import call seeds/updates the whole series in one shot.
  *
  * Expected response shape — see docs/storyverse-import-contract.md for the
  * full spec:
@@ -57,7 +59,8 @@ use RuntimeException;
  * Throws two distinct, catchable exceptions so callers can show a
  * meaningful message rather than a generic failure:
  *  - InvalidStoryVerseUrlException: the pasted input isn't a bare slug and
- *    doesn't look like https://storyverse.amowogbaje.com/stories/{slug}.
+ *    doesn't look like https://storyverse.amowogbaje.com/stories/{slug}
+ *    (the reader-facing host — see services.storyverse.reader_base_url).
  *  - StoryVerseStoryNotFoundException: the input was a well-formed
  *    slug/URL, but StoryVerse returned 404 for it.
  */
@@ -73,10 +76,11 @@ class StoryVerseImportService
 
     /**
      * Accepts either a bare slug (e.g. "shadow-of-the-sentinel-1-the-awakening")
-     * or a full StoryVerse story URL
-     * (https://storyverse.amowogbaje.com/stories/{slug}). Anything else —
-     * a URL on the wrong host, or missing the /stories/ path — is rejected
-     * with a specific, actionable error rather than silently guessing.
+     * or a full StoryVerse story URL on the reader-facing host
+     * (https://{services.storyverse.reader_base_url}/stories/{slug}).
+     * Anything else — a URL on the wrong host, or missing the /stories/
+     * path — is rejected with a specific, actionable error rather than
+     * silently guessing.
      */
     protected function extractSlug(string $input): string
     {
