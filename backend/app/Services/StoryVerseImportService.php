@@ -199,6 +199,7 @@ class StoryVerseImportService
                 /** @var Story $story */
                 $story = Story::firstOrNew(['story_link' => $episode['url']]);
                 $isNew = !$story->exists;
+                $content = $episode['content'] ?? null;
 
                 $story->fill([
                     'series_id' => $series->id,
@@ -206,13 +207,15 @@ class StoryVerseImportService
                     'episode_number' => $episode['number'],
                     'title' => $episode['title'] ?? $story->title,
                     'source' => 'storyverse',
+                    'story_text'=> $content,
+                    'user_supplied_text'=> $content,
                     'published_at' => $episode['published_at'] ?? $story->published_at,
                 ]);
 
                 // Only touch story_text (and re-arm prompt generation) when the
                 // content actually changed, so re-imports don't wipe out image
                 // prompts already generated against the previous text.
-                $content = $episode['content'] ?? null;
+                
                 if ($content && $story->story_text !== $content) {
                     $story->story_text = $content;
                     if ($isNew) {
