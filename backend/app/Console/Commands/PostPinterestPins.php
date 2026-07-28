@@ -24,6 +24,12 @@ use Illuminate\Support\Str;
  * their cap for "today" (in services.pinterest.daily_cap_timezone) and
  * posts the oldest still-eligible image belonging to a user under cap. If
  * every user with a ready image has hit their cap, the run does nothing.
+ *
+ * Also posts through the *owning* user's own connected Pinterest account
+ * (PinterestService::forUser()) rather than a single global/static token —
+ * each account's token is checked (and refreshed if needed) right before
+ * use, on top of the proactive pinterest:refresh-tokens run scheduled
+ * ahead of this command.
  */
 class PostPinterestPins extends Command
 {
@@ -33,7 +39,7 @@ class PostPinterestPins extends Command
     /** How many oldest-ready candidates to consider before giving up for this run. */
     private const CANDIDATE_BATCH_SIZE = 100;
 
-    public function handle(PinterestService $pinterest): int
+    public function handle(): int
     {
         $cap = (int) config('services.pinterest.max_pins_per_user_per_day', 5);
         $timezone = config('services.pinterest.daily_cap_timezone', 'UTC');
@@ -79,6 +85,7 @@ class PostPinterestPins extends Command
         $this->info("Posting prompt #{$next->id} to Pinterest (user #{$next->user_id}, {$alreadyPostedToday}/{$cap} posted today so far).");
 
         try {
+            $pinterest = PinterestService::forUser($next->user_id);
             $pinId = $pinterest->postPin($next);
 
             $next->update([

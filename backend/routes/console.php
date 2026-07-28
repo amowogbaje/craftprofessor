@@ -20,7 +20,15 @@ Schedule::command('story:generate-images --limit=5 --time-budget=50')
     ->withoutOverlapping(10)
     ->runInBackground();
 
-// Scheduler 3: 2 Pinterest posts/day — every 5 min, active for a 5-hour window
+// Scheduler 3a: refresh Pinterest tokens ~10 min before the posting window
+// opens, with a buffer wide enough to cover the whole window below (23:00
+// through 03:00 = up to 4h, so 300 min / 5h of headroom).
+Schedule::command('pinterest:refresh-tokens --buffer=300')
+    ->dailyAt('22:50')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
+// Scheduler 3b: 2 Pinterest posts/day — every 5 min, active for a 5-hour window
 Schedule::command('story:post-pinterest-pin')
     ->everyFiveMinutes()
     ->between('23:00', '23:59')

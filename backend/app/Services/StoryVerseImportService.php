@@ -199,7 +199,6 @@ class StoryVerseImportService
                 /** @var Story $story */
                 $story = Story::firstOrNew(['story_link' => $episode['url']]);
                 $isNew = !$story->exists;
-                Log::info('episode content: '.$episode['content']);
 
                 $story->fill([
                     'series_id' => $series->id,

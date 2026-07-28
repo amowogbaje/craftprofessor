@@ -167,18 +167,34 @@ class PinterestService
     }
 
     /**
+     * Public entry point for proactively refreshing a connected account's
+     * token ahead of time — used by `php artisan pinterest:refresh-tokens`
+     * (scheduled to run shortly before the Pin-posting windows in
+     * routes/console.php) so postPin() never has to refresh mid-run.
+     * Just delegates to the same refresh logic forAccount()/forUser() use
+     * on-demand, but with a caller-supplied buffer instead of the default
+     * 5 minutes — the scheduled refresh wants a much wider buffer (e.g.
+     * covering the whole posting window) than the "is this about to be
+     * used right now" check does.
+     */
+    public static function refreshTokenIfNeeded(SocialAccount $account, int $bufferMinutes = 5): SocialAccount
+    {
+        return self::ensureFreshToken($account, $bufferMinutes);
+    }
+
+    /**
      * Refresh the account's access token if it's expired or about to expire.
      * Persists the new token/expiry back to the SocialAccount row and returns
      * the (possibly updated) model so callers always see fresh data.
      */
-    protected static function ensureFreshToken(SocialAccount $account): SocialAccount
+    protected static function ensureFreshToken(SocialAccount $account, int $bufferMinutes = 5): SocialAccount
     {
         // No expiry info (e.g. legacy row) or no refresh token — nothing we can do, leave as-is.
         if (!$account->token_expires_at || !$account->refresh_token) {
             return $account;
         }
 
-        $buffer = now()->addMinutes(5);
+        $buffer = now()->addMinutes($bufferMinutes);
 
         if ($account->token_expires_at->gt($buffer)) {
             return $account; // still valid for a while, no refresh needed
