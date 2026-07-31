@@ -6,8 +6,8 @@ export async function fetchWallet() {
   return data
 }
 
-export async function fetchTransactions() {
-  const { data } = await api.get<Paginated<CoinTransaction>>('/wallet/transactions')
+export async function fetchTransactions(page = 1) {
+  const { data } = await api.get<Paginated<CoinTransaction>>('/wallet/transactions', { params: { page } })
   return data
 }
 

@@ -28,8 +28,8 @@ export async function requestVideo(imagePromptId: number) {
   return data
 }
 
-export async function fetchStories() {
-  const { data } = await api.get<Paginated<Story>>('/stories')
+export async function fetchStories(page = 1) {
+  const { data } = await api.get<Paginated<Story>>('/stories', { params: { page } })
   return data
 }
 
@@ -41,8 +41,8 @@ export async function submitStory(text: string, storyLink?: string) {
   return data
 }
 
-export async function fetchSeries() {
-  const { data } = await api.get<Paginated<StorySeries>>('/story-series')
+export async function fetchSeries(page = 1) {
+  const { data } = await api.get<Paginated<StorySeries>>('/story-series', { params: { page } })
   return data
 }
 

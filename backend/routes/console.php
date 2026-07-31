@@ -13,6 +13,15 @@ Schedule::command('images:cleanup-published')
     ->daily()
     ->withoutOverlapping();
 
+// Delete images + prompt rows 10 days after they were posted to Pinterest.
+// Runs at 04:00 UTC, after the last posting window (ends 03:00) closes.
+// --force is required here: this is non-interactive, and the command
+// prompts for confirmation unless --force/--dry-run is passed.
+Schedule::command('images:cleanup-posted-prompts --days=10 --force')
+    ->dailyAt('04:00')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
 // Scheduler 2: generate up to 3 images/day — every 15 min, active for a 4-hour window
 Schedule::command('story:generate-images --limit=5 --time-budget=50')
     ->everyFifteenMinutes()

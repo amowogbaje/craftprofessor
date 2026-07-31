@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { fetchStories, submitStory } from '@/lib/api-content'
 import { apiErrorMessage } from '@/lib/http'
 import { useToast } from '@/components/ui/use-toast'
 import { Input } from '@/components/ui/input'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 
 
 export function StoriesPage() {
@@ -17,7 +18,15 @@ export function StoriesPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({ queryKey: ['stories'], queryFn: fetchStories })
+  const query = useInfiniteQuery({
+    queryKey: ['stories'],
+    queryFn: ({ pageParam }) => fetchStories(pageParam),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.current_page < lastPage.last_page ? lastPage.current_page + 1 : undefined),
+  })
+
+  const stories = useMemo(() => query.data?.pages.flatMap((p) => p.data) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
 
   const mutation = useMutation({
     mutationFn: () => submitStory(text, storyLink),
@@ -80,29 +89,38 @@ export function StoriesPage() {
 
       <div className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-medium">Your stories</h2>
-        {isLoading ? (
+        {query.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : data?.data.length === 0 ? (
+        ) : stories.length === 0 ? (
           <p className="text-sm text-muted-foreground">No stories yet — submit one above.</p>
         ) : (
-          data?.data.map((story) => (
-            <Card key={story.id}>
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm">
-                    {story.user_supplied_text?.slice(0, 140) ?? story.story_link ?? 'Untitled story'}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {story.series ? `Series: ${story.series.title}` : 'Standalone'} ·{' '}
-                    {new Date(story.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <Badge variant={story.prompt_generated ? 'success' : 'secondary'}>
-                  {story.prompt_generated ? `${story.image_prompts_count ?? 0} PROMPTS` : 'PROCESSING'}
-                </Badge>
-              </CardContent>
-            </Card>
-          ))
+          <>
+            {stories.map((story) => (
+              <Card key={story.id}>
+                <CardContent className="flex items-center justify-between gap-4 py-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">
+                      {story.user_supplied_text?.slice(0, 140) ?? story.story_link ?? 'Untitled story'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {story.series ? `Series: ${story.series.title}` : 'Standalone'} ·{' '}
+                      {new Date(story.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge variant={story.prompt_generated ? 'success' : 'secondary'}>
+                    {story.prompt_generated ? `${story.image_prompts_count ?? 0} PROMPTS` : 'PROCESSING'}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+            <LoadMoreButton
+              onClick={() => query.fetchNextPage()}
+              isLoading={query.isFetchingNextPage}
+              hasMore={!!query.hasNextPage}
+              totalShown={stories.length}
+              total={total}
+            />
+          </>
         )}
       </div>
     </div>

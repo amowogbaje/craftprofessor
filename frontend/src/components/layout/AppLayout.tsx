@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Coins, Film, LayoutGrid, LogOut, Settings, BookOpen, Layers, Link2, BarChart3 } from 'lucide-react'
+import { Coins, Film, LayoutGrid, LogOut, Settings, BookOpen, Layers, Link2, BarChart3, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fetchWallet } from '@/lib/api-wallet'
 import { cn } from '@/lib/utils'
+import { MobileMoreSheet } from './MobileMoreSheet'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Feed', icon: LayoutGrid },
@@ -14,9 +16,18 @@ const NAV_ITEMS = [
   { to: '/settings', label: 'Publish limits', icon: Settings },
 ]
 
+// Mobile bottom nav only has room for a handful of items before it gets
+// cramped — these are the ones that earn a permanent spot; everything
+// else lives behind "More" (see MobileMoreSheet). The desktop sidebar
+// below still shows the full NAV_ITEMS list — it isn't space-constrained.
+const MOBILE_PRIMARY_COUNT = 4
+const MOBILE_PRIMARY_ITEMS = NAV_ITEMS.slice(0, MOBILE_PRIMARY_COUNT)
+const MOBILE_MORE_ITEMS = NAV_ITEMS.slice(MOBILE_PRIMARY_COUNT)
+
 export function AppLayout() {
   const { user, logout } = useAuth()
   const { data: wallet } = useQuery({ queryKey: ['wallet'], queryFn: fetchWallet })
+  const [moreOpen, setMoreOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen">
@@ -85,11 +96,11 @@ export function AppLayout() {
             {wallet?.balance ?? '—'}
           </span>
         </header>
-        <main className="flex-1 px-5 py-6 md:px-8 md:py-8">
+        <main className="flex-1 px-5 py-6 pb-24 md:px-8 md:py-8 md:pb-8">
           <Outlet />
         </main>
-        <nav className="flex items-center justify-around border-t border-border bg-card/60 py-2 md:hidden">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border bg-card/95 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-card/80 md:hidden">
+          {MOBILE_PRIMARY_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -101,7 +112,17 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className="flex flex-col items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+            More
+          </button>
         </nav>
+
+        <MobileMoreSheet items={MOBILE_MORE_ITEMS} open={moreOpen} onOpenChange={setMoreOpen} />
       </div>
     </div>
   )
