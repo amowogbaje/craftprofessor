@@ -474,18 +474,30 @@ class PinterestService
 
     public function postPin(StoryImagePrompt $imagePrompt): string
     {
+        return $this->postPinToBoard($imagePrompt, $this->boardId);
+    }
+
+    /**
+     * Same as postPin(), but against an explicit board rather than
+     * whatever board this instance was constructed with — lets one
+     * PinterestService instance post the same image to several boards
+     * (see PinterestPlatform::publishToBoards()) without needing a
+     * separate instance per board.
+     */
+    public function postPinToBoard(StoryImagePrompt $imagePrompt, string $boardId): string
+    {
         $this->requireAuth();
 
         Log::channel('pinterest')->info('PinterestService: posting pin', [
             'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
-            'board_id' => $this->boardId,
+            'board_id' => $boardId,
         ]);
 
         $response = Http::withToken($this->accessToken)
             ->timeout(30)
             ->post("{$this->baseUrl()}/pins", [
-                'board_id' => $this->boardId,
+                'board_id' => $boardId,
                 'title' => $imagePrompt->pinterest_title,
                 'description' => $imagePrompt->pinterest_description,
                 'link' => $imagePrompt->pinterest_link,
@@ -499,6 +511,7 @@ class PinterestService
             Log::channel('pinterest')->error('PinterestService: pin creation failed', [
                 'environment' => $this->environment,
                 'story_image_prompt_id' => $imagePrompt->id,
+                'board_id' => $boardId,
                 'status' => $response->status(),
                 'body' => Str::limit($response->body(), 1000),
             ]);
@@ -514,6 +527,7 @@ class PinterestService
         Log::channel('pinterest')->info('PinterestService: pin posted', [
             'environment' => $this->environment,
             'story_image_prompt_id' => $imagePrompt->id,
+            'board_id' => $boardId,
             'pin_id' => $pinId,
         ]);
 

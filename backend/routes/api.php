@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LinkStatsController;
+use App\Http\Controllers\Api\PinterestBoardController;
 use App\Http\Controllers\Api\PublishSettingController;
 use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\StorySeriesController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Api\StoryVerseImportController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\SocialAccountController;
+use App\Http\Controllers\Api\SocialOAuthController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
@@ -47,6 +49,8 @@ Route::prefix('auth')->group(function () {
 Route::post('/webhooks/flutterwave', [WalletController::class, 'handleWebhook']);
 Route::get('/wallet/topup/callback', [WalletController::class, 'handleRedirectCallback'])->name('wallet.topup.callback');
 Route::get('/social/pinterest/callback', [SocialAccountController::class, 'pinterestCallback']);
+Route::get('/social/{provider}/callback', [SocialOAuthController::class, 'callback'])
+    ->whereIn('provider', ['linkedin', 'twitter', 'youtube', 'instagram', 'facebook']);
 
 
 Route::get('/', fn () => response()->json(['message' => 'Social Media Assistant API is running.']));
@@ -91,5 +95,15 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/accounts', [SocialAccountController::class, 'index']);
         Route::delete('/accounts/{provider}', [SocialAccountController::class, 'destroy']);
         Route::get('/pinterest/connect', [SocialAccountController::class, 'pinterestConnect']);
+        Route::get('/{provider}/connect', [SocialOAuthController::class, 'connect'])
+            ->whereIn('provider', ['linkedin', 'twitter', 'youtube', 'instagram', 'facebook']);
+    });
+
+    // Dynamic-vs-fixed Pinterest board selection (see PinterestBoardSelectionService)
+    Route::prefix('pinterest')->group(function () {
+        Route::get('/boards', [PinterestBoardController::class, 'index']);
+        Route::post('/boards/sync', [PinterestBoardController::class, 'sync']);
+        Route::patch('/boards/{board}', [PinterestBoardController::class, 'update']);
+        Route::put('/posting-mode', [PinterestBoardController::class, 'updatePostingMode']);
     });
 });

@@ -56,6 +56,62 @@ return [
         'daily_cap_timezone' => env('PINTEREST_DAILY_CAP_TIMEZONE', 'UTC'),
     ],
 
+    'linkedin' => [
+        'client_id' => env('LINKEDIN_CLIENT_ID'),
+        'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
+        'redirect_uri' => env('LINKEDIN_REDIRECT_URI'),
+        // LinkedIn versions its REST API by calendar month (e.g. "202601").
+        // Required on every call as the LinkedIn-Version header. Bump this
+        // periodically — LinkedIn deprecates old versions after ~1 year.
+        'api_version' => env('LINKEDIN_API_VERSION', '202601'),
+    ],
+
+    'twitter' => [
+        // OAuth 2.0 (PKCE) app credentials — used for posting via API v2.
+        'client_id' => env('TWITTER_CLIENT_ID'),
+        'client_secret' => env('TWITTER_CLIENT_SECRET'),
+        'redirect_uri' => env('TWITTER_REDIRECT_URI'),
+        // Media upload (both image and video/chunked) still lives on the
+        // legacy v1.1 endpoint as of this writing and requires OAuth 1.0a
+        // user-context signing — separate credentials from the OAuth2 app
+        // above. See TwitterPlatform for why both exist.
+        'consumer_key' => env('TWITTER_CONSUMER_KEY'),
+        'consumer_secret' => env('TWITTER_CONSUMER_SECRET'),
+        'access_token' => env('TWITTER_ACCESS_TOKEN'),
+        'access_token_secret' => env('TWITTER_ACCESS_TOKEN_SECRET'),
+    ],
+
+    'youtube' => [
+        // Standard Google OAuth2 app (same credential shape as "Sign in
+        // with Google"), scoped to https://www.googleapis.com/auth/youtube.upload
+        'client_id' => env('YOUTUBE_CLIENT_ID'),
+        'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
+        'redirect_uri' => env('YOUTUBE_REDIRECT_URI'),
+    ],
+
+    'instagram' => [
+        // Instagram Graph API — requires a Business/Creator account linked
+        // to a Facebook Page, and the same Meta app as Facebook below.
+        'client_id' => env('INSTAGRAM_CLIENT_ID'),
+        'client_secret' => env('INSTAGRAM_CLIENT_SECRET'),
+        'redirect_uri' => env('INSTAGRAM_REDIRECT_URI'),
+        'graph_api_version' => env('META_GRAPH_API_VERSION', 'v21.0'),
+    ],
+
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'redirect_uri' => env('FACEBOOK_REDIRECT_URI'),
+        'graph_api_version' => env('META_GRAPH_API_VERSION', 'v21.0'),
+    ],
+
+    'social_boards' => [
+        // See PinterestBoardSelectionService::MAX_BOARDS_PER_PIN — kept
+        // here too so it's visible alongside the other per-platform config
+        // even though the constant is what's actually enforced in code.
+        'max_boards_per_pin' => env('SOCIAL_MAX_BOARDS_PER_PIN', 3),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),

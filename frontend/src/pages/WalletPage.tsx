@@ -14,7 +14,7 @@ function formatMoney(amount: number, currency: string) {
 export function WalletPage() {
   const { toast } = useToast()
   const { data: wallet, isLoading } = useQuery({ queryKey: ['wallet'], queryFn: fetchWallet })
-  const { data: transactions } = useQuery({ queryKey: ['wallet-transactions'], queryFn: fetchTransactions })
+  const { data: transactions } = useQuery({ queryKey: ['wallet-transactions'], queryFn: () => fetchTransactions() })
 
   const topup = useMutation({
     mutationFn: (index: number) => initiateTopup(index),

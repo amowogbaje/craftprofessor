@@ -14,7 +14,7 @@ export function SeriesPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({ queryKey: ['series'], queryFn: fetchSeries })
+  const { data, isLoading } = useQuery({ queryKey: ['series'], queryFn: () => fetchSeries() })
 
   const mutation = useMutation({
     mutationFn: () => importStoryVerseSeries(url.trim()),

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 
@@ -84,6 +85,12 @@ class StoryImagePrompt extends Model
             'id',
             'id'
         );
+    }
+
+    /** Every attempted post (any platform, any board) for this image. */
+    public function socialPosts(): HasMany
+    {
+        return $this->hasMany(SocialPost::class);
     }
 
     /**

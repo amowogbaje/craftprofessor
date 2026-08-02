@@ -5,17 +5,35 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
 use App\Services\PinterestService;
+use App\Services\SocialPlatforms\Support\OAuthProviderConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class SocialAccountController extends Controller
 {
+    /**
+     * Providers whose Connect button should actually be clickable. A
+     * provider only counts as "configured" once its client_id AND
+     * client_secret env vars are both set — until then the frontend shows
+     * "Coming soon" instead of a button that would just fail on click.
+     */
+    private const PROVIDERS = ['pinterest', 'linkedin', 'twitter', 'youtube', 'instagram', 'facebook'];
+
     public function index(Request $request)
     {
         $accounts = $request->user()->socialAccounts()
             ->get(['id', 'provider', 'provider_username', 'scopes', 'connected_at']);
 
-        return response()->json(['data' => $accounts]);
+        return response()->json([
+            'data' => $accounts,
+            'configured_providers' => collect(self::PROVIDERS)
+                ->mapWithKeys(fn (string $provider) => [$provider => $this->isConfigured($provider)]),
+        ]);
+    }
+
+    protected function isConfigured(string $provider): bool
+    {
+        return OAuthProviderConfig::isConfigured($provider);
     }
 
     public function destroy(Request $request, string $provider)
@@ -27,6 +45,8 @@ class SocialAccountController extends Controller
 
     public function pinterestConnect(Request $request, PinterestService $pinterest)
     {
+        abort_unless($this->isConfigured('pinterest'), 503, 'Pinterest isn\'t configured on this server yet.');
+
         $state = $pinterest->generateState($request->user()->id);
 
         return response()->json(['url' => $pinterest->getAuthorizationUrl($state)]);

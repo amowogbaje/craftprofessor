@@ -79,6 +79,41 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => 14,
         ],
+
+        'linkedin' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/linkedin/linkedin.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
+        'twitter' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/twitter/twitter.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
+        'youtube' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/youtube/youtube.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
+        'instagram' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/instagram/instagram.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
+        'facebook' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/facebook/facebook.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
         
         'story_agent' => [
             'driver' => 'daily',

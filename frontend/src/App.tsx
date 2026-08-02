@@ -15,6 +15,7 @@ import { WalletPage } from '@/pages/WalletPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SocialAccountsPage } from '@/pages/SocialAccountsPage'
+import { PinterestBoardsPage } from '@/pages/PinterestBoardsPage'
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/social-accounts" element={<SocialAccountsPage />} />
+          <Route path="/settings/pinterest-boards" element={<PinterestBoardsPage />} />
         </Route>
       </Route>
 
