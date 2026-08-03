@@ -20,11 +20,20 @@ export function PinterestBoardsPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<number[]>([])
+  // Decoupled from data.board_posting_mode on purpose: switching to "Fixed"
+  // needs to unlock board picking in the UI *before* anything is saved
+  // (there's nothing valid to save yet — no boards are chosen). Only
+  // "Save selection" (or picking "Dynamic", which needs no boards) ever
+  // actually calls the API.
+  const [uiMode, setUiMode] = useState<'dynamic' | 'fixed'>('dynamic')
 
   const { data, isLoading } = useQuery({ queryKey: ['pinterest-board-settings'], queryFn: fetchPinterestBoardSettings })
 
   useEffect(() => {
-    if (data) setSelected(data.preferred_board_ids)
+    if (data) {
+      setSelected(data.preferred_board_ids)
+      setUiMode(data.board_posting_mode)
+    }
   }, [data])
 
   const syncMutation = useMutation({
@@ -56,8 +65,6 @@ export function PinterestBoardsPage() {
     })
   }
 
-  const mode = data?.board_posting_mode ?? 'dynamic'
-
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -76,10 +83,13 @@ export function PinterestBoardsPage() {
           <button
             type="button"
             disabled={modeMutation.isPending}
-            onClick={() => modeMutation.mutate({ mode: 'dynamic' })}
+            onClick={() => {
+              setUiMode('dynamic')
+              modeMutation.mutate({ mode: 'dynamic' })
+            }}
             className={cn(
               'flex flex-1 items-start gap-3 rounded-lg border p-4 text-left transition-colors',
-              mode === 'dynamic' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary'
+              uiMode === 'dynamic' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary'
             )}
           >
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -94,16 +104,18 @@ export function PinterestBoardsPage() {
           <button
             type="button"
             disabled={modeMutation.isPending}
-            onClick={() => modeMutation.mutate({ mode: 'fixed', boardIds: selected })}
+            onClick={() => setUiMode('fixed')}
             className={cn(
               'flex flex-1 items-start gap-3 rounded-lg border p-4 text-left transition-colors',
-              mode === 'fixed' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary'
+              uiMode === 'fixed' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary'
             )}
           >
             <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div>
               <p className="text-sm font-medium">Fixed boards</p>
-              <p className="text-xs text-muted-foreground">Always post to the same {MAX_FIXED_BOARDS} board(s) you choose below.</p>
+              <p className="text-xs text-muted-foreground">
+                Pick up to {MAX_FIXED_BOARDS} board(s) below, then save — CraftProfessor will always post to those.
+              </p>
             </div>
           </button>
         </CardContent>
@@ -114,7 +126,7 @@ export function PinterestBoardsPage() {
           <div>
             <CardTitle>Your boards</CardTitle>
             <CardDescription>
-              {mode === 'fixed'
+              {uiMode === 'fixed'
                 ? `Select up to ${MAX_FIXED_BOARDS} — ${selected.length}/${MAX_FIXED_BOARDS} selected.`
                 : 'Synced from Pinterest, plus any the AI has created.'}
             </CardDescription>
@@ -136,12 +148,12 @@ export function PinterestBoardsPage() {
                 <button
                   key={board.id}
                   type="button"
-                  disabled={mode !== 'fixed'}
+                  disabled={uiMode !== 'fixed'}
                   onClick={() => toggleBoard(board)}
                   className={cn(
                     'flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
-                    mode === 'fixed' ? 'cursor-pointer hover:bg-secondary' : 'cursor-default opacity-70',
-                    isSelected && mode === 'fixed' ? 'border-primary bg-primary/5' : 'border-border'
+                    uiMode === 'fixed' ? 'cursor-pointer hover:bg-secondary' : 'cursor-default opacity-70',
+                    isSelected && uiMode === 'fixed' ? 'border-primary bg-primary/5' : 'border-border'
                   )}
                 >
                   <div className="min-w-0 flex-1">
@@ -159,22 +171,31 @@ export function PinterestBoardsPage() {
                         Inactive
                       </Badge>
                     )}
-                    {mode === 'fixed' && isSelected && <Check className="h-4 w-4 text-primary" />}
+                    {uiMode === 'fixed' && isSelected && <Check className="h-4 w-4 text-primary" />}
                   </div>
                 </button>
               )
             })
           )}
 
-          {mode === 'fixed' && (
-            <Button
-              className="mt-2 self-start"
-              size="sm"
-              disabled={modeMutation.isPending || selected.length === 0}
-              onClick={() => modeMutation.mutate({ mode: 'fixed', boardIds: selected })}
-            >
-              {modeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save selection'}
-            </Button>
+          {uiMode === 'fixed' && (
+            <div className="mt-2 flex items-center gap-3">
+              <Button
+                size="sm"
+                disabled={modeMutation.isPending || selected.length === 0}
+                onClick={() => modeMutation.mutate({ mode: 'fixed', boardIds: selected })}
+              >
+                {modeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save selection'}
+              </Button>
+              {selected.length === 0 && (
+                <p className="text-xs text-muted-foreground">Pick at least 1 board above before saving.</p>
+              )}
+              {data?.board_posting_mode === 'fixed' && selected.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Currently posting to {data.preferred_board_ids.length} saved board(s).
+                </p>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

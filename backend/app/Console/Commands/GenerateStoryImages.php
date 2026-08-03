@@ -4,24 +4,32 @@ namespace App\Console\Commands;
 
 use App\Exceptions\UserGenerationLimitReached;
 use App\Models\Character;
+use App\Models\Environment;
+use App\Models\Prop;
 use App\Models\StoryImagePrompt;
 use App\Services\ImageGeneratorService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Scheduler 3 — checks how many images were generated today (character
- * portraits + story scenes count together against one shared daily cap,
- * since both draw on the same Gemini free-tier quota); if under the cap,
- * generates the next one.
+ * portraits + environment/prop references + story scenes all count
+ * together against one shared daily cap, since they all draw on the same
+ * Gemini free-tier quota); if under the cap, generates the next one.
  *
- * Ordering rule: a character's portrait is ALWAYS generated before any
- * story scene that depends on it, so scene generation has a real reference
- * image to work from instead of inventing the character's look fresh.
+ * Ordering rule: a reference asset's portrait (character, environment, OR
+ * prop) is ALWAYS generated before any story scene that depends on it, so
+ * scene generation has real reference material to work from instead of
+ * inventing the look fresh every time. Portrait candidates are picked
+ * oldest-first *across all three asset types together*, not
+ * character-queue-then-environment-queue-then-prop-queue — otherwise a
+ * story with many characters could starve its own environments/props (and
+ * therefore its own scenes) for a long time.
  *
- * Fairness rule: both queues are oldest-first, which used to mean that if
+ * Fairness rule: all queues are oldest-first, which used to mean that if
  * the oldest row belonged to a user who was rate-limited or out of coins,
  * every remaining iteration this run would re-select that exact same row,
  * fail the same way, and never advance — starving every other user queued
@@ -37,6 +45,13 @@ class GenerateStoryImages extends Command
 
     /** User ids that hit a limit/coins wall this run — skip their rows for the rest of the run. */
     protected Collection $blockedUserIds;
+
+    /** Which model class + service method handles each reference-asset type. */
+    private const ASSET_TYPES = [
+        'Character' => ['model' => Character::class, 'method' => 'generateCharacterImage'],
+        'Environment' => ['model' => Environment::class, 'method' => 'generateEnvironmentImage'],
+        'Prop' => ['model' => Prop::class, 'method' => 'generatePropImage'],
+    ];
 
     public function handle(ImageGeneratorService $service): int
     {
@@ -66,20 +81,22 @@ class GenerateStoryImages extends Command
                 break;
             }
 
-            $url = null;
-            $character = $this->nextPortraitCharacter();
+            $success = null;
+            [$asset, $type] = $this->nextPortraitAsset();
 
             try {
-                if ($character) {
-                    $url = $service->generateCharacterImage($character);
-                    $type = 'Character';
+                if ($asset) {
+                    $method = self::ASSET_TYPES[$type]['method'];
+                    $success = $service->{$method}($asset);
+                    $label = "{$type} portrait #{$asset->id} ({$asset->name})";
                 } else {
                     $prompt = $this->nextReadyScenePrompt();
                     if (!$prompt) {
                         break; // No more work to do, exit silently
                     }
-                    $url = $service->generateImage($prompt);
+                    $success = $service->generateImage($prompt);
                     $type = 'Scene';
+                    $label = "Scene #{$prompt->id}";
                 }
             } catch (UserGenerationLimitReached $e) {
                 $this->blockedUserIds->push($e->userId);
@@ -90,8 +107,8 @@ class GenerateStoryImages extends Command
                 continue; // re-loop: selection now excludes this user
             }
 
-            if ($url) {
-                $this->info("Generated {$type} image: {$url}");
+            if ($success) {
+                $this->info("Generated {$label}");
                 $generated++;
             }
         }
@@ -107,13 +124,31 @@ class GenerateStoryImages extends Command
         return self::SUCCESS;
     }
 
-    /** Oldest awaiting-portrait character, excluding users already blocked this run. */
-    protected function nextPortraitCharacter(): ?Character
+    /**
+     * The oldest awaiting-portrait row across characters, environments,
+     * AND props together (not one type at a time), excluding users already
+     * blocked this run.
+     *
+     * @return array{0: ?Model, 1: ?string} [$asset, $typeLabel]
+     */
+    protected function nextPortraitAsset(): array
     {
-        return Character::awaitingPortrait()
-            ->when($this->blockedUserIds->isNotEmpty(), fn ($q) => $q->whereNotIn('user_id', $this->blockedUserIds->unique()))
-            ->oldest('id')
-            ->first();
+        $candidates = collect(self::ASSET_TYPES)
+            ->map(function (array $config, string $type) {
+                $asset = $config['model']::awaitingPortrait()
+                    ->when($this->blockedUserIds->isNotEmpty(), fn ($q) => $q->whereNotIn('user_id', $this->blockedUserIds->unique()))
+                    ->oldest('id')
+                    ->first();
+
+                return $asset ? [$asset, $type] : null;
+            })
+            ->filter();
+
+        if ($candidates->isEmpty()) {
+            return [null, null];
+        }
+
+        return $candidates->sort(fn ($a, $b) => $a[0]->id <=> $b[0]->id)->first();
     }
 
     protected function imagesGeneratedToday(): int
@@ -121,16 +156,19 @@ class GenerateStoryImages extends Command
         $today = [Carbon::today(), Carbon::tomorrow()];
 
         $characterCount = Character::whereNotNull('img_url')->whereBetween('generated_at', $today)->count();
+        $environmentCount = Environment::whereNotNull('img_url')->whereBetween('generated_at', $today)->count();
+        $propCount = Prop::whereNotNull('img_url')->whereBetween('generated_at', $today)->count();
         $sceneCount = StoryImagePrompt::whereNotNull('image_generated_url')->whereBetween('generated_at', $today)->count();
 
-        return $characterCount + $sceneCount;
+        return $characterCount + $environmentCount + $propCount + $sceneCount;
     }
 
     /**
      * Scans pending scene prompts (oldest first) and returns the first one
-     * whose referenced characters all already have a generated img_url.
-     * Prompts whose characters aren't ready yet are skipped for this run —
-     * they'll naturally become eligible once their portraits finish.
+     * whose referenced characters, environments, AND props all already
+     * have a generated img_url. Prompts with anything not ready yet are
+     * skipped for this run — they'll naturally become eligible once their
+     * portraits/references finish.
      */
     protected function nextReadyScenePrompt(): ?StoryImagePrompt
     {
@@ -138,17 +176,31 @@ class GenerateStoryImages extends Command
             ->when($this->blockedUserIds->isNotEmpty(), fn ($q) => $q->whereNotIn('user_id', $this->blockedUserIds->unique()))
             ->oldest('id')
             ->get()
-            ->first(function (StoryImagePrompt $prompt) {
+            ->first(fn (StoryImagePrompt $prompt) => $this->allReferencesReady($prompt));
+    }
 
-                $ids = $prompt->main_character_ids ?? [];
+    protected function allReferencesReady(StoryImagePrompt $prompt): bool
+    {
+        foreach (self::ASSET_TYPES as $config) {
+            $column = match ($config['model']) {
+                Character::class => 'main_character_ids',
+                Environment::class => 'main_environment_ids',
+                Prop::class => 'main_prop_ids',
+            };
 
-                if (empty($ids)) {
-                    return true;
-                }
+            $ids = $prompt->{$column} ?? [];
 
-                return ! Character::whereIn('id', $ids)
-                    ->whereNull('img_url')
-                    ->exists();
-            });
+            if (empty($ids)) {
+                continue;
+            }
+
+            $notReady = $config['model']::whereIn('id', $ids)->whereNull('img_url')->exists();
+
+            if ($notReady) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -45,4 +45,16 @@ class StorySeries extends Model
     {
         return $this->hasMany(Character::class, 'series_id');
     }
+
+    /** Environments (settings/locations) shared across every episode of this series. */
+    public function environments(): HasMany
+    {
+        return $this->hasMany(Environment::class, 'series_id');
+    }
+
+    /** Props (recurring significant objects) shared across every episode of this series. */
+    public function props(): HasMany
+    {
+        return $this->hasMany(Prop::class, 'series_id');
+    }
 }

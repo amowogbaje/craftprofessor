@@ -2,27 +2,24 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasReferenceImage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\Concerns\HasReferenceImage;
 
 /**
- * @property-read User $user
+ * A recurring named setting/location (e.g. "The Sentinel's Underground
+ * Vault"). Structurally and behaviorally identical to Character — see
+ * App\Models\Concerns\HasReferenceImage — just a different asset type so
+ * scene generation can keep a location visually consistent the same way
+ * it already does for faces.
  *
- * img_url doubles as the character's generated reference/face image once
- * ImageGeneratorService::generateCharacterImage() has run for it — that
- * image is then fed back into Gemini as a reference when generating any
- * story scene image that includes this character.
- *
- * story_id records which episode a character was first introduced in — it
- * is NOT an ownership link for series characters. For any character whose
- * story is part of a series, series_id is also set, and that's the scope
- * used to find/reuse the character across every other episode (see
- * Story::knownCharacters()). Standalone (non-series) stories leave
- * series_id null and characters stay scoped to that one story.
+ * story_id records which episode this environment was first introduced
+ * in, same convention as Character::story_id — NOT an ownership scope.
+ * series_id (when set) is what Story::knownEnvironments() uses to find
+ * environments across every episode of a series.
  */
-class Character extends Model
+class Environment extends Model
 {
     use HasFactory;
     use HasReferenceImage;

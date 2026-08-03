@@ -55,4 +55,12 @@ class ImageGeneratorAgent implements ImageProviderContract
             ->landscape()
             ->generate(provider: config('ai.default_for_images'));
     }
+
+    public function supportsReferenceImages(): bool
+    {
+        // Gemini image generation accepts image attachments as reference
+        // context — this is the one provider ImageGeneratorService can
+        // safely hand reference pixels to.
+        return true;
+    }
 }

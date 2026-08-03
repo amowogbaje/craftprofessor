@@ -6,8 +6,11 @@ use App\Ai\Agents\ImageGeneratorAgent;
 use App\Ai\Agents\ImagePromptAgent;
 use App\Exceptions\UserGenerationLimitReached;
 use App\Models\Character;
+use App\Models\Environment;
+use App\Models\Prop;
 use App\Models\Story;
 use App\Models\StoryImagePrompt;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +30,9 @@ class ImageGeneratorService
     {
         Log::info('ImageGeneratorService: generating prompts for story', ['story_id' => $story->id]);
 
-        $existing = $story->knownCharacters()->get();
+        $existingCharacters = $story->knownCharacters()->get();
+        $existingEnvironments = $story->knownEnvironments()->get();
+        $existingProps = $story->knownProps()->get();
 
         $user = $story->user;
         $batchCost = (int) config('coins.costs.image_prompt') * 10; // schema always returns exactly 10 prompts
@@ -46,84 +51,40 @@ class ImageGeneratorService
         try {
             $story->imagePrompts()->delete();
 
-            $response = (new ImagePromptAgent($story, $existing))
-                ->prompt('Generate only the missing character prompts and new scene prompts.');
+            $response = (new ImagePromptAgent($story, $existingCharacters, $existingEnvironments, $existingProps))
+                ->prompt('Generate only the missing character/environment/prop prompts and new scene prompts.');
 
-            $characters = $response['characters'] ?? [];
             $prompts = $response['prompts'] ?? [];
 
             if (count($prompts) === 0) {
                 throw new \RuntimeException('ImagePromptAgent returned no prompts.');
             }
 
-            $charactersByName = $story->knownCharacters()->get()->keyBy(fn ($c) => Str::lower($c->name));
-
-            $makeCharacter = function (string $name, ?string $imagePrompt = null) use ($story) {
-                return Character::create([
-                    'story_id' => $story->id,
-                    'series_id' => $story->series_id,
-                    'user_id' => $story->user_id,
-                    'name' => $name,
-                    'image_prompt' => $imagePrompt,
-                ]);
-            };
-
-            foreach ($characters as $charEntry) {
-                $name = $charEntry['name'] ?? null;
-                if (!$name) {
-                    continue;
-                }
-
-                $key = Str::lower($name);
-                $character = $charactersByName->get($key);
-
-                if ($character) {
-                    if (empty($character->img_url) && empty($character->image_prompt)) {
-                        $character->update(['image_prompt' => $charEntry['image_prompt'] ?? null]);
-                    }
-                } else {
-                    $character = $makeCharacter($name, $charEntry['image_prompt'] ?? null);
-                }
-
-                $charactersByName->put($key, $character);
-            }
+            $charactersByName = $this->reconcileAssets(
+                Character::class, $response['characters'] ?? [], $story, $existingCharacters
+            );
+            $environmentsByName = $this->reconcileAssets(
+                Environment::class, $response['environments'] ?? [], $story, $existingEnvironments
+            );
+            $propsByName = $this->reconcileAssets(
+                Prop::class, $response['props'] ?? [], $story, $existingProps
+            );
 
             foreach ($prompts as $entry) {
-                $names = collect($entry['character_names'] ?? []);
-
-                $characterIds = $names
-                    ->map(function (string $name) use ($charactersByName, $story) {
-                        $key = Str::lower($name);
-
-                        if ($charactersByName->has($key)) {
-                            return $charactersByName[$key]->id;
-                        }
-
-                        // The model referenced a character in a scene prompt
-                        // that it never declared in the "characters" array,
-                        // so we have no image_prompt to design a portrait
-                        // from. Creating a character here would silently
-                        // strand it with a null image_prompt forever (it
-                        // never qualifies for scopeAwaitingPortrait). Skip
-                        // it instead and log so schema drift is visible.
-                        Log::warning('ImageGeneratorService: scene referenced undeclared character, skipping', [
-                            'story_id' => $story->id,
-                            'character_name' => $name,
-                        ]);
-
-                        return null;
-                    })
-                    ->filter()
-                    ->values()
-                    ->all();
+                $characterIds = $this->resolveIds($entry['character_names'] ?? [], $charactersByName, $story, 'character');
+                $environmentIds = $this->resolveIds($entry['environment_names'] ?? [], $environmentsByName, $story, 'environment');
+                $propIds = $this->resolveIds($entry['prop_names'] ?? [], $propsByName, $story, 'prop');
 
                 StoryImagePrompt::create([
                     'user_id' => $story->user_id,
                     'story_id' => $story->id,
                     'prompt' => $entry['prompt'],
                     'caption' => $entry['caption'] ?? null,
+                    'status' => StoryImagePrompt::STATUS_PUBLISHED,
                     'prompt_coin_cost' => (int) config('coins.costs.image_prompt'),
                     'main_character_ids' => $characterIds,
+                    'main_environment_ids' => $environmentIds,
+                    'main_prop_ids' => $propIds,
                     'pinterest_title' => $entry['pinterest_title'] ?? null,
                     'pinterest_description' => $entry['pinterest_description'] ?? null,
                     'pinterest_link' => $story->story_link
@@ -137,6 +98,8 @@ class ImageGeneratorService
             Log::info('ImageGeneratorService: prompts stored', [
                 'story_id' => $story->id,
                 'character_count' => $charactersByName->count(),
+                'environment_count' => $environmentsByName->count(),
+                'prop_count' => $propsByName->count(),
                 'prompt_count' => count($prompts),
             ]);
         } catch (\Throwable $e) {
@@ -156,72 +119,170 @@ class ImageGeneratorService
         }
     }
 
+    /**
+     * Shared reuse-or-create logic for characters/environments/props: the
+     * agent's response for each type is a flat array of
+     * {name, image_prompt}. LOCKED ones (already known, already had an
+     * image_prompt) get left alone; new/NEED_DESIGN ones get created or
+     * have their image_prompt filled in for the first time.
+     *
+     * @param class-string $modelClass
+     * @return \Illuminate\Support\Collection<string, \Illuminate\Database\Eloquent\Model> keyed by lowercased name
+     */
+    protected function reconcileAssets(string $modelClass, array $entries, Story $story, Collection $existing): \Illuminate\Support\Collection
+    {
+        $byName = $existing->keyBy(fn ($a) => Str::lower($a->name));
+
+        foreach ($entries as $entry) {
+            $name = $entry['name'] ?? null;
+            if (!$name) {
+                continue;
+            }
+
+            $key = Str::lower($name);
+            $asset = $byName->get($key);
+
+            if ($asset) {
+                if (empty($asset->img_url) && empty($asset->image_prompt)) {
+                    $asset->update(['image_prompt' => $entry['image_prompt'] ?? null]);
+                }
+            } else {
+                $asset = $modelClass::create([
+                    'story_id' => $story->id,
+                    'series_id' => $story->series_id,
+                    'user_id' => $story->user_id,
+                    'name' => $name,
+                    'image_prompt' => $entry['image_prompt'] ?? null,
+                ]);
+            }
+
+            $byName->put($key, $asset);
+        }
+
+        return $byName;
+    }
+
+    /**
+     * Resolves a scene entry's *_names array (e.g. character_names) into
+     * asset ids via the name=>model map reconcileAssets() built, logging
+     * and skipping (rather than silently stranding) any name the model
+     * referenced in a scene but never declared up front.
+     */
+    protected function resolveIds(array $names, \Illuminate\Support\Collection $byName, Story $story, string $assetType): array
+    {
+        return collect($names)
+            ->map(function (string $name) use ($byName, $story, $assetType) {
+                $key = Str::lower($name);
+
+                if ($byName->has($key)) {
+                    return $byName[$key]->id;
+                }
+
+                Log::warning("ImageGeneratorService: scene referenced undeclared {$assetType}, skipping", [
+                    'story_id' => $story->id,
+                    'name' => $name,
+                ]);
+
+                return null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     public function generateCharacterImage(Character $character): bool
     {
-        // Prefer the character's own user_id (backfilled by migration);
-        // fall back to story/series lookup for any pre-migration edge case.
-        $user = $character->user ?? $character->story?->user ?? $character->series?->user;
-        $cost = (int) config('coins.costs.character_portrait');
+        return $this->generateReferencePortrait($character, 'character_portrait', 'character-images');
+    }
+
+    public function generateEnvironmentImage(Environment $environment): bool
+    {
+        return $this->generateReferencePortrait($environment, 'environment_reference', 'environment-images');
+    }
+
+    public function generatePropImage(Prop $prop): bool
+    {
+        return $this->generateReferencePortrait($prop, 'prop_reference', 'prop-images');
+    }
+
+    /**
+     * Shared by generateCharacterImage/generateEnvironmentImage/generatePropImage
+     * — all three assets have an identical generation lifecycle (see
+     * App\Models\Concerns\HasReferenceImage), the only differences being
+     * the coin cost config key and the storage path prefix.
+     *
+     * @param Character|Environment|Prop $asset
+     */
+    protected function generateReferencePortrait($asset, string $costConfigKey, string $storagePrefix): bool
+    {
+        // Character keeps its own user_id (backfilled by migration); fall
+        // back to story/series lookup for any pre-migration edge case.
+        // Environment/Prop always have user_id set directly at creation.
+        $user = $asset->user ?? $asset->story?->user ?? $asset->series?->user;
+        $cost = (int) config("coins.costs.{$costConfigKey}");
+
+        $assetType = class_basename($asset);
 
         if ($user) {
             if (!$this->limits->canGenerateImage($user)) {
-                Log::info('ImageGeneratorService: daily/monthly image limit reached, skipping portrait', ['character_id' => $character->id, 'user_id' => $user->id]);
+                Log::info("ImageGeneratorService: daily/monthly image limit reached, skipping {$assetType}", ['id' => $asset->id, 'user_id' => $user->id]);
                 throw new UserGenerationLimitReached($user->id, 'daily/monthly image limit reached');
             }
             if (!$this->wallet->canAfford($user, $cost)) {
-                Log::info('ImageGeneratorService: insufficient coins, skipping portrait', ['character_id' => $character->id, 'user_id' => $user->id]);
+                Log::info("ImageGeneratorService: insufficient coins, skipping {$assetType}", ['id' => $asset->id, 'user_id' => $user->id]);
                 throw new UserGenerationLimitReached($user->id, 'insufficient coins');
             }
-            $this->wallet->debit($user, $cost, 'character_portrait', $character);
+            $this->wallet->debit($user, $cost, $costConfigKey, $asset);
         }
 
-        Log::info('ImageGeneratorService: generating character image', [
-            'character_id' => $character->id,
-            'story_id' => $character->story_id,
-            'name' => $character->name,
+        Log::info("ImageGeneratorService: generating {$assetType} image", [
+            'id' => $asset->id,
+            'story_id' => $asset->story_id,
+            'name' => $asset->name,
         ]);
 
         $maxRetries = 3;
         $attempt = 0;
+        $e = null;
 
         while ($attempt < $maxRetries) {
             try {
-                $image = $this->imageProvider->generatePortrait($character->image_prompt);
+                $image = $this->imageProvider->generatePortrait($asset->image_prompt);
 
-                $basePath = "character-images/{$character->story_id}/{$character->id}-" . Str::random(8);
- 
+                $basePath = "{$storagePrefix}/{$asset->story_id}/{$asset->id}-" . Str::random(8);
+
                 $optimizedPath = $image->storeOptimizedAs("{$basePath}.webp");
                 $qualityPath = $image->storeQualityAs("{$basePath}.jpg");
 
                 $url = Storage::disk('public')->url($optimizedPath);
                 $qualityUrl = Storage::disk('public')->url($qualityPath);
 
-                $character->update([
+                $asset->update([
                     'img_url' => $url,
-                    'img_quality_url' => $qualityUrl,
+                    'img_url_quality' => $qualityUrl,
                     'generated_at' => now(),
                     'last_generation_error' => null,
                 ]);
 
                 return true;
-
-            } catch (RateLimitedException $e) {
+            } catch (RateLimitedException $ex) {
+                $e = $ex;
                 $attempt++;
                 if ($attempt >= $maxRetries) break;
-                
+
                 // Exponential backoff: sleep 10, 20, then 40 seconds
-                sleep(pow(2, $attempt) * 5); 
-                Log::warning("Rate limited on character {$character->id}, retrying... Attempt {$attempt}");
-            } catch (\Throwable $e) {
+                sleep(pow(2, $attempt) * 5);
+                Log::warning("Rate limited on {$assetType} {$asset->id}, retrying... Attempt {$attempt}");
+            } catch (\Throwable $ex) {
+                $e = $ex;
                 break; // Exit loop for non-rate-limit errors
             }
         }
 
-        // Error handling if exhausted retries or non-rate-limit error occurred
         if ($user) {
-            $this->wallet->refund($user, $cost, 'character_portrait', $character, ['error' => ($e ?? null)?->getMessage()]);
+            $this->wallet->refund($user, $cost, $costConfigKey, $asset, ['error' => $e?->getMessage()]);
         }
-        $this->handleFailure($character, $e ?? null);
+        $this->handleFailure($asset, $e);
         return false;
     }
 
@@ -252,13 +313,9 @@ class ImageGeneratorService
 
         while ($attempt < $maxRetries) {
             try {
-                $referenceImageUrls = $imagePrompt->mainCharacters()
-                    ->pluck('img_url')
-                    ->filter()
-                    ->values()
-                    ->all();
+                [$prompt, $referenceImageUrls] = $this->buildScenePromptAndReferences($imagePrompt);
 
-                $image = $this->imageProvider->generateScene($imagePrompt->prompt, $referenceImageUrls);
+                $image = $this->imageProvider->generateScene($prompt, $referenceImageUrls);
 
                 $basePath = "story-images/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8);
  
@@ -304,6 +361,46 @@ class ImageGeneratorService
         }
         $this->handleFailure($imagePrompt, $e ?? null);
         return false;
+    }
+
+    /**
+     * The heart of this class's answer to "what if the image model can't
+     * take reference images": ask the active provider up front (once,
+     * cheaply — no extra API call) whether it can actually use reference
+     * pixels at all.
+     *
+     * - If yes (e.g. Gemini): pass every known character/environment/prop's
+     *   img_url straight through as reference images, prompt text
+     *   untouched — this is strictly better than describing them in words.
+     * - If no (e.g. Cloudflare Workers AI SDXL, or Together on a non-Kontext
+     *   model): don't pass any URLs the provider would just silently drop —
+     *   instead fold each asset's locked-in image_prompt description
+     *   straight into the scene prompt text, so a text-only model still has
+     *   *something* concrete to stay consistent with instead of inventing
+     *   the character/location fresh every single time.
+     *
+     * @return array{0: string, 1: string[]} [$prompt, $referenceImageUrls]
+     */
+    protected function buildScenePromptAndReferences(StoryImagePrompt $imagePrompt): array
+    {
+        $assets = $imagePrompt->allReferenceAssets();
+
+        if ($this->imageProvider->supportsReferenceImages()) {
+            $referenceImageUrls = $assets->pluck('img_url')->filter()->values()->all();
+
+            return [$imagePrompt->prompt, $referenceImageUrls];
+        }
+
+        $definitions = $assets
+            ->map(fn ($asset) => $asset->definitionText())
+            ->filter()
+            ->implode("\n");
+
+        $prompt = $definitions === ''
+            ? $imagePrompt->prompt
+            : "{$imagePrompt->prompt}\n\nKeep these established visual details consistent:\n{$definitions}";
+
+        return [$prompt, []];
     }
 
     protected function handleFailure($model, ?\Throwable $e): void

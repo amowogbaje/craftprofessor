@@ -19,6 +19,8 @@ return [
         'video_prompt' => (int) env('COIN_COST_VIDEO_PROMPT', 3),
         'video_generation' => (int) env('COIN_COST_VIDEO_GENERATION', 40),
         'character_portrait' => (int) env('COIN_COST_CHARACTER_PORTRAIT', 8),
+        'environment_reference' => (int) env('COIN_COST_ENVIRONMENT_REFERENCE', 8),
+        'prop_reference' => (int) env('COIN_COST_PROP_REFERENCE', 8),
     ],
 
     /*

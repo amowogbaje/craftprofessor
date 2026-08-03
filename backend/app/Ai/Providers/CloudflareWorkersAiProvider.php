@@ -23,9 +23,16 @@ class CloudflareWorkersAiProvider implements ImageProviderContract
 
     public function generateScene(string $prompt, array $referenceImageUrls = [])
     {
-        // Workers AI SDXL doesn't take reference images; fold character
-        // descriptions into the prompt text if you have them, or ignore.
+        // Workers AI SDXL doesn't take reference images — ImageGeneratorService
+        // already knows this via supportsReferenceImages() and won't even try
+        // to pass $referenceImageUrls here; it folds character/environment/prop
+        // descriptions into $prompt as text instead before calling this.
         return $this->run($prompt);
+    }
+
+    public function supportsReferenceImages(): bool
+    {
+        return false;
     }
 
     protected function run(string $prompt)

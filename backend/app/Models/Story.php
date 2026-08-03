@@ -58,6 +58,18 @@ class Story extends Model
         return $this->hasMany(Character::class);
     }
 
+    /** Environments (settings/locations) first introduced in this specific story. */
+    public function environments(): HasMany
+    {
+        return $this->hasMany(Environment::class);
+    }
+
+    /** Props (recurring significant objects) first introduced in this specific story. */
+    public function props(): HasMany
+    {
+        return $this->hasMany(Prop::class);
+    }
+
     public function imagePrompts(): HasMany
     {
         return $this->hasMany(StoryImagePrompt::class);
@@ -80,6 +92,22 @@ class Story extends Model
         return $this->isPartOfSeries()
             ? $this->series->characters()
             : $this->characters();
+    }
+
+    /** Same reuse-across-episodes logic as knownCharacters(), for environments. */
+    public function knownEnvironments(): HasMany
+    {
+        return $this->isPartOfSeries()
+            ? $this->series->environments()
+            : $this->environments();
+    }
+
+    /** Same reuse-across-episodes logic as knownCharacters(), for props. */
+    public function knownProps(): HasMany
+    {
+        return $this->isPartOfSeries()
+            ? $this->series->props()
+            : $this->props();
     }
 
     /** Scheduler 1 target: stories with no text yet (and no user-supplied text either). */

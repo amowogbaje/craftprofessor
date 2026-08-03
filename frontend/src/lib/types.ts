@@ -111,12 +111,44 @@ export interface LinkStatsTopStory {
   story?: { id: number; title: string | null; story_link: string | null; episode_number: number | null; series_id: number | null }
 }
 
+export interface PostStatsByPlatform {
+  platform: string
+  posted: number
+  failed: number
+}
+
+export interface PostStatsByDay {
+  date: string
+  platform: string
+  posted: number
+}
+
+export interface PeriodSummary {
+  clicks: number
+  clicks_by_platform: { social_media: string; clicks: number }[]
+  posts: number
+  posts_by_platform: { platform: string; posts: number }[]
+}
+
 export interface LinkStats {
   range: { from: string; to: string }
-  total_clicks: number
-  by_social_media: LinkStatsBySocial[]
-  by_day: LinkStatsByDay[]
-  top_stories: LinkStatsTopStory[]
+  clicks: {
+    total: number
+    by_social_media: LinkStatsBySocial[]
+    by_day: LinkStatsByDay[]
+    top_stories: LinkStatsTopStory[]
+  }
+  posts: {
+    total_posted: number
+    total_failed: number
+    by_platform: PostStatsByPlatform[]
+    by_day: PostStatsByDay[]
+  }
+  periods: {
+    today: PeriodSummary
+    this_week: PeriodSummary
+    this_month: PeriodSummary
+  }
 }
 
 export interface CoinPackage {

@@ -23,18 +23,41 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
 
-    public function __construct(protected Story $story, protected Collection $existingCharacters)
-    {
+    public function __construct(
+        protected Story $story,
+        protected Collection $existingCharacters,
+        protected Collection $existingEnvironments,
+        protected Collection $existingProps,
+    ) {
     }
 
     protected function characterList(): string
     {
-        return $this->existingCharacters->map(function ($c) {
-            $hasPrompt = !empty($c->image_prompt);
-            $status = $hasPrompt ? 'LOCKED' : 'NEED_DESIGN';
-            $promptContext = $hasPrompt ? "Prompt: {$c->image_prompt}" : "";
+        return $this->assetList($this->existingCharacters);
+    }
 
-            return "Name: {$c->name} ({$status}) {$promptContext}";
+    protected function environmentList(): string
+    {
+        return $this->assetList($this->existingEnvironments);
+    }
+
+    protected function propList(): string
+    {
+        return $this->assetList($this->existingProps);
+    }
+
+    protected function assetList(Collection $assets): string
+    {
+        if ($assets->isEmpty()) {
+            return '(none yet)';
+        }
+
+        return $assets->map(function ($a) {
+            $hasPrompt = !empty($a->image_prompt);
+            $status = $hasPrompt ? 'LOCKED' : 'NEED_DESIGN';
+            $promptContext = $hasPrompt ? "Prompt: {$a->image_prompt}" : '';
+
+            return "Name: {$a->name} ({$status}) {$promptContext}";
         })->implode("\n");
     }
 
@@ -51,6 +74,15 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 
         CHARACTER REFERENCE LIST:
         {$this->characterList()}
+
+        ENVIRONMENT REFERENCE LIST (recurring named settings/locations):
+        {$this->environmentList()}
+
+        PROP REFERENCE LIST (recurring significant objects — only track ones
+        that matter to the plot or recur across scenes, e.g. a specific
+        weapon, heirloom, or document; don't invent props for generic
+        background objects):
+        {$this->propList()}
 
         VISUAL STYLE — apply to every prompt (character and scene):
         - Photorealistic, cinematic film-still quality — think Netflix/HBO
@@ -71,14 +103,24 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
             reuse that name exactly and NOT provide a new image_prompt.
         - If a character is marked "NEED_DESIGN" or is new, you MUST provide a detailed
             image_prompt.
-        2. Produce a "prompts" array of exactly 10 scene prompts.
-        - Use the exact names from the "characters" array for consistency.
+        2. Produce an "environments" array for every recurring named
+           setting/location appearing in 2 or more of the 10 scene prompts
+           (a location used only once doesn't need its own tracked entry —
+           just describe it inline in that scene's prompt instead).
+        - Same LOCKED/NEED_DESIGN reuse rule as characters above.
+        3. Produce a "props" array for every recurring significant object —
+           same 2-or-more-scenes threshold and LOCKED/NEED_DESIGN reuse rule
+           as environments. Leave this array empty if nothing qualifies;
+           don't force it.
+        4. Produce a "prompts" array of exactly 10 scene prompts.
+        - Use the exact names from the "characters"/"environments"/"props"
+          arrays for consistency.
         - Every image prompt MUST end with the literal note: "(for AI image generation, upload-ready)".
         - Do NOT ask the image model to render any text inside the image
           itself — text rendered by diffusion models is unreliable. Any
           caption is generated separately (see "caption" field) and will be
           overlaid on the finished image by our own rendering code.
-        3. Caption selectivity — NOT every scene should have a caption.
+        5. Caption selectivity — NOT every scene should have a caption.
         - Set "caption" to null for scenes that are strong purely as an
           image (a striking expression, an establishing shot, a beautiful
           wide shot) — text would clutter these.
@@ -102,14 +144,38 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
         reads as a specific person, not a generic model.
         End with: "(for AI image generation, upload-ready, character reference)".
 
+        Each "environments" entry:
+        - name: a short, reusable label for the location (e.g. "The
+          Sentinel's Underground Vault"), not a scene-specific description.
+        - image_prompt: a detailed establishing-shot prompt (for NEW
+          environments only) capturing the space itself — architecture,
+          scale, key fixed objects, ambient lighting and color palette —
+          without any characters or a specific action in it, so it reads as
+          a reusable location reference rather than one moment in it.
+        End with: "(for AI image generation, upload-ready, environment reference)".
+
+        Each "props" entry:
+        - name: a short, reusable label for the object.
+        - image_prompt: a detailed close-up/product-style prompt (for NEW
+          props only) isolating the object — materials, wear, distinguishing
+          marks, on a neutral or softly blurred backdrop.
+        End with: "(for AI image generation, upload-ready, prop reference)".
+
         Each "prompts" entry:
         - prompt: a vivid, single-scene cinematic visual description
           following the VISUAL STYLE rules above. Explicitly name the
           characters shown, their expression/emotion, action, and the
-          camera framing/lighting for that specific shot.
+          camera framing/lighting for that specific shot. When the scene
+          takes place in a tracked environment or features a tracked prop,
+          reference it consistently with how it was described.
         - character_names: array of character name strings appearing in the scene.
+        - environment_names: array of environment name strings this scene
+          takes place in (only names from the "environments" array — omit
+          entirely for scenes in a one-off, untracked location).
+        - prop_names: array of prop name strings featured in the scene
+          (only names from the "props" array — omit if none).
         - caption: nullable. A short, punchy line (6-14 words) in the voice
-          of the story, following rule 3 above. No hashtags, no emoji, no
+          of the story, following rule 5 above. No hashtags, no emoji, no
           quotation marks — just the line itself, or null.
         - pinterest_title: punchy, scroll-stopping title (under 100 chars)
           that complements (doesn't repeat) the caption.
@@ -131,12 +197,32 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                 )
                 ->required(),
 
+            'environments' => $schema->array()
+                ->items(
+                    $schema->object(fn (JsonSchema $s) => [
+                        'name' => $s->string()->required(),
+                        'image_prompt' => $s->string()->nullable(),
+                    ])
+                )
+                ->required(),
+
+            'props' => $schema->array()
+                ->items(
+                    $schema->object(fn (JsonSchema $s) => [
+                        'name' => $s->string()->required(),
+                        'image_prompt' => $s->string()->nullable(),
+                    ])
+                )
+                ->required(),
+
             'prompts' => $schema->array()
                 ->min(10)->max(10)
                 ->items(
                     $schema->object(fn (JsonSchema $s) => [
                         'prompt' => $s->string()->required(),
                         'character_names' => $s->array()->items($s->string())->required(),
+                        'environment_names' => $s->array()->items($s->string())->nullable(),
+                        'prop_names' => $s->array()->items($s->string())->nullable(),
                         'caption' => $s->string()->nullable(),
                         'pinterest_title' => $s->string()->required(),
                         'pinterest_description' => $s->string()->required(),

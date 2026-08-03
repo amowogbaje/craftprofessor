@@ -17,6 +17,18 @@ class StoryImagePrompt extends Model
     public const STATUS_SCHEDULED = 'scheduled';
     public const STATUS_PUBLISHED = 'published';
 
+    /**
+     * Generated images go straight to "published" (feed-visible, eligible
+     * for Pinterest posting) rather than sitting in "draft" waiting for a
+     * manual publish step — the DB column still defaults to 'draft' for
+     * any raw/non-Eloquent insert, but every real creation path (see
+     * ImageGeneratorService::generatePromptsForStory()) sets this
+     * explicitly, and this is a safety net for any future one that forgets to.
+     */
+    protected $attributes = [
+        'status' => self::STATUS_PUBLISHED,
+    ];
+
     protected $fillable = [
         'user_id',
         'story_id',
@@ -32,6 +44,8 @@ class StoryImagePrompt extends Model
         'prompt_coin_cost',
         'image_coin_cost',
         'main_character_ids',
+        'main_environment_ids',
+        'main_prop_ids',
         'pinterest_title',
         'pinterest_description',
         'pinterest_link',
@@ -43,6 +57,8 @@ class StoryImagePrompt extends Model
 
     protected $casts = [
         'main_character_ids' => 'array',
+        'main_environment_ids' => 'array',
+        'main_prop_ids' => 'array',
         'generated_at' => 'datetime',
         'scheduled_at' => 'datetime',
         'published_at' => 'datetime',
@@ -130,6 +146,28 @@ class StoryImagePrompt extends Model
         $ids = $this->main_character_ids ?? [];
 
         return empty($ids) ? collect() : Character::whereIn('id', $ids)->get();
+    }
+
+    public function mainEnvironments(): Collection
+    {
+        $ids = $this->main_environment_ids ?? [];
+
+        return empty($ids) ? collect() : Environment::whereIn('id', $ids)->get();
+    }
+
+    public function mainProps(): Collection
+    {
+        $ids = $this->main_prop_ids ?? [];
+
+        return empty($ids) ? collect() : Prop::whereIn('id', $ids)->get();
+    }
+
+    /** Every reference-image asset (characters + environments + props) attached to this prompt. */
+    public function allReferenceAssets(): Collection
+    {
+        return $this->mainCharacters()
+            ->concat($this->mainEnvironments())
+            ->concat($this->mainProps());
     }
 
     public function characters()
