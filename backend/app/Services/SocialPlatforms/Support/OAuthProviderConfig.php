@@ -75,7 +75,7 @@ class OAuthProviderConfig
             'facebook' => [
                 'authorize_url' => 'https://www.facebook.com/' . config('services.facebook.graph_api_version') . '/dialog/oauth',
                 'token_url' => 'https://graph.facebook.com/' . config('services.facebook.graph_api_version') . '/oauth/access_token',
-                'scopes' => ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
+                'scopes' => ['pages_read_engagement', 'pages_show_list'],
                 'pkce' => false,
                 'client_id' => config('services.facebook.client_id'),
                 'client_secret' => config('services.facebook.client_secret'),
