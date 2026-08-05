@@ -12,3 +12,5 @@ interface PublishesText extends SocialPlatform
 {
     public function publishText(string $text, ?string $linkUrl = null): SocialPostResult;
 }
+
+

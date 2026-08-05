@@ -4,6 +4,8 @@ namespace App\Services\SocialPlatforms;
 
 use App\Models\StoryImagePrompt;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
+use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\PublishesText;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
 use Illuminate\Support\Facades\Http;
@@ -21,7 +23,7 @@ use RuntimeException;
  * header (services.linkedin.api_version) and that header needs bumping
  * roughly yearly as old versions age out — see LinkedIn's API changelog.
  */
-class LinkedInPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesText
+class LinkedInPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesText, PublishesRawImage, PublishesRawVideo
 {
     public function name(): string
     {
@@ -30,37 +32,64 @@ class LinkedInPlatform extends AbstractSocialPlatform implements PublishesImages
 
     public function publishImage(StoryImagePrompt $imagePrompt): SocialPostResult
     {
+        $result = $this->publishRawImage(
+            (string) $imagePrompt->image_generated_url,
+            (string) $imagePrompt->pinterest_title,
+            $imagePrompt->pinterest_description,
+        );
+
+        $this->recordPost([
+            'story_image_prompt_id' => $imagePrompt->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    /** Cause-media / any raw-URL image, decoupled from StoryImagePrompt. */
+    public function publishRawImage(string $imageUrl, string $title, ?string $details = null, ?string $linkUrl = null): SocialPostResult
+    {
         try {
-            $assetUrn = $this->uploadImage($imagePrompt->image_generated_url);
+            $assetUrn = $this->uploadImage($imageUrl);
 
-            $text = trim(($imagePrompt->pinterest_title ? $imagePrompt->pinterest_title . "\n\n" : '')
-                . ($imagePrompt->pinterest_description ?? ''));
+            $text = trim(collect([$title, $details])->filter()->implode("\n\n"));
 
-            $postId = $this->createPost($text ?: ($imagePrompt->caption ?? ''), [
-                'media' => [
-                    'title' => $imagePrompt->pinterest_title,
+            $postId = $this->createPost($text, [
+                'media' => array_filter([
+                    'title' => $title,
                     'id' => $assetUrn,
-                ],
-            ]);
-
-            $this->recordPost([
-                'story_image_prompt_id' => $imagePrompt->id,
-                'status' => 'posted',
-                'external_post_id' => $postId,
+                ]),
             ]);
 
             return SocialPostResult::success($postId);
         } catch (\Throwable $e) {
-            $this->log()->error('LinkedInPlatform: publishImage failed', [
-                'story_image_prompt_id' => $imagePrompt->id,
-                'error' => $e->getMessage(),
+            $this->log()->error('LinkedInPlatform: publishRawImage failed', ['error' => $e->getMessage()]);
+
+            return SocialPostResult::failure($e->getMessage());
+        }
+    }
+
+    /**
+     * Single-part video upload via LinkedIn's REST video-assets endpoint.
+     * Suitable for short-form video (LinkedIn's own guidance caps
+     * single-part uploads well under 200MB); for longer video, switch to
+     * the multipart uploadInstructions LinkedIn returns from
+     * initializeUpload instead of assuming index 0 covers the whole file.
+     */
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null): SocialPostResult
+    {
+        try {
+            $assetUrn = $this->uploadVideo($videoUrl);
+
+            $postId = $this->createPost($caption, [
+                'content' => ['media' => ['id' => $assetUrn]],
             ]);
 
-            $this->recordPost([
-                'story_image_prompt_id' => $imagePrompt->id,
-                'status' => 'failed',
-                'error' => $e->getMessage(),
-            ]);
+            return SocialPostResult::success($postId);
+        } catch (\Throwable $e) {
+            $this->log()->error('LinkedInPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
 
             return SocialPostResult::failure($e->getMessage());
         }
@@ -122,6 +151,57 @@ class LinkedInPlatform extends AbstractSocialPlatform implements PublishesImages
         }
 
         return $imageUrn;
+    }
+
+    /** Registers + uploads a video, returns its LinkedIn asset URN. */
+    protected function uploadVideo(string $videoUrl): string
+    {
+        $videoBytes = Http::timeout(60)->get($videoUrl)->body();
+
+        $init = $this->http()->post('https://api.linkedin.com/rest/videos?action=initializeUpload', [
+            'initializeUploadRequest' => [
+                'owner' => $this->authorUrn(),
+                'fileSizeBytes' => strlen($videoBytes),
+                'uploadCaptions' => false,
+                'uploadThumbnail' => false,
+            ],
+        ]);
+
+        if ($init->failed()) {
+            throw new RuntimeException("LinkedIn video upload init failed: {$init->body()}");
+        }
+
+        $uploadUrl = $init->json('value.uploadInstructions.0.uploadUrl');
+        $videoUrn = $init->json('value.video');
+
+        if (!$uploadUrl || !$videoUrn) {
+            throw new RuntimeException('LinkedIn did not return an uploadUrl/video URN.');
+        }
+
+        $upload = Http::withToken($this->account->access_token)
+            ->withBody($videoBytes, 'application/octet-stream')
+            ->timeout(120)
+            ->put($uploadUrl);
+
+        if ($upload->failed()) {
+            throw new RuntimeException("LinkedIn video binary upload failed: {$upload->body()}");
+        }
+
+        $etag = $upload->header('ETag');
+
+        $finalize = $this->http()->post('https://api.linkedin.com/rest/videos?action=finalizeUpload', [
+            'finalizeUploadRequest' => [
+                'video' => $videoUrn,
+                'uploadToken' => '',
+                'uploadedPartIds' => $etag ? [$etag] : [],
+            ],
+        ]);
+
+        if ($finalize->failed()) {
+            throw new RuntimeException("LinkedIn video finalize failed: {$finalize->body()}");
+        }
+
+        return $videoUrn;
     }
 
     /** @param array $content Either ['media' => ['id' => ..., 'title' => ...]] or ['article' => [...]] or []. */

@@ -13,6 +13,7 @@ class SocialPost extends Model
         'video_id',
         'platform',
         'pinterest_board_id',
+        'cause_broadcast_id',
         'status',
         'external_post_id',
         'error',
@@ -41,6 +42,11 @@ class SocialPost extends Model
     public function pinterestBoard(): BelongsTo
     {
         return $this->belongsTo(PinterestBoard::class);
+    }
+
+    public function causeBroadcast(): BelongsTo
+    {
+        return $this->belongsTo(CauseBroadcast::class);
     }
 
     public function markPosted(string $externalPostId): void

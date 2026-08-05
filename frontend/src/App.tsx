@@ -16,6 +16,8 @@ import { SettingsPage } from '@/pages/SettingsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { SocialAccountsPage } from '@/pages/SocialAccountsPage'
 import { PinterestBoardsPage } from '@/pages/PinterestBoardsPage'
+import { CausesPage } from '@/pages/CausesPage'
+import { CauseDetailPage } from '@/pages/CauseDetailPage'
 
 export default function App() {
   return (
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/social-accounts" element={<SocialAccountsPage />} />
           <Route path="/settings/pinterest-boards" element={<PinterestBoardsPage />} />
+          <Route path="/causes" element={<CausesPage />} />
+          <Route path="/causes/:idOrSlug" element={<CauseDetailPage />} />
         </Route>
       </Route>
 

@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\CauseBroadcastController;
+use App\Http\Controllers\Api\CauseController;
+use App\Http\Controllers\Api\CauseMediaController;
+use App\Http\Controllers\Api\CauseMembershipController;
+use App\Http\Controllers\Api\CausePaymentController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LinkStatsController;
 use App\Http\Controllers\Api\PinterestBoardController;
@@ -48,6 +53,8 @@ Route::prefix('auth')->group(function () {
 */
 Route::post('/webhooks/flutterwave', [WalletController::class, 'handleWebhook']);
 Route::get('/wallet/topup/callback', [WalletController::class, 'handleRedirectCallback'])->name('wallet.topup.callback');
+Route::post('/webhooks/flutterwave/causes', [CausePaymentController::class, 'handleWebhook']);
+Route::get('/causes/payment/callback', [CausePaymentController::class, 'handleRedirectCallback'])->name('causes.payment.callback');
 Route::get('/social/pinterest/callback', [SocialAccountController::class, 'pinterestCallback']);
 Route::get('/social/{provider}/callback', [SocialOAuthController::class, 'callback'])
     ->whereIn('provider', ['linkedin', 'twitter', 'youtube', 'instagram', 'facebook']);
@@ -106,4 +113,25 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('/boards/{board}', [PinterestBoardController::class, 'update']);
         Route::put('/posting-mode', [PinterestBoardController::class, 'updatePostingMode']);
     });
+
+    // Causes: owner uploads media, invites/opens membership, members' own
+    // connected accounts broadcast that media on a schedule (see
+    // App\Services\Causes\*, App\Console\Commands\PostDueCauseBroadcasts).
+    Route::get('/causes', [CauseController::class, 'index']);
+    Route::get('/causes/mine', [CauseController::class, 'mine']);
+    Route::get('/my-cause-broadcasts', [CauseBroadcastController::class, 'mine']);
+    Route::post('/causes', [CauseController::class, 'store']);
+    Route::get('/causes/{cause}', [CauseController::class, 'show']);
+
+    Route::get('/causes/{cause}/media', [CauseMediaController::class, 'index']);
+    Route::post('/causes/{cause}/media', [CauseMediaController::class, 'store']);
+    Route::delete('/causes/{cause}/media/{media}', [CauseMediaController::class, 'destroy']);
+
+    Route::get('/causes/{cause}/members', [CauseMembershipController::class, 'index']);
+    Route::post('/causes/{cause}/invite', [CauseMembershipController::class, 'invite']);
+    Route::post('/causes/{cause}/join', [CauseMembershipController::class, 'join']);
+    Route::post('/causes/{cause}/opt-out', [CauseMembershipController::class, 'optOut']);
+
+    Route::get('/causes/{cause}/broadcasts', [CauseBroadcastController::class, 'index']);
+    Route::post('/causes/{cause}/media/{media}/broadcasts', [CauseBroadcastController::class, 'store']);
 });

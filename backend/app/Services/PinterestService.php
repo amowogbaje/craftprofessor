@@ -534,6 +534,128 @@ class PinterestService
         return $pinId;
     }
 
+    /** Same shape as postPinToBoard(), but for any raw image URL/text (e.g. Cause media) rather than a StoryImagePrompt. */
+    public function postRawImagePinToBoard(string $title, ?string $description, ?string $link, string $imageUrl, string $boardId): string
+    {
+        $this->requireAuth();
+
+        $response = Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post("{$this->baseUrl()}/pins", array_filter([
+                'board_id' => $boardId,
+                'title' => $title,
+                'description' => $description,
+                'link' => $link,
+                'media_source' => [
+                    'source_type' => 'image_url',
+                    'url' => $imageUrl,
+                ],
+            ]));
+
+        if ($response->failed()) {
+            throw new RuntimeException("Pinterest pin creation failed: {$response->body()}");
+        }
+
+        $pinId = $response->json('id');
+        if (!$pinId) {
+            throw new RuntimeException('Pinterest response did not include a pin id.');
+        }
+
+        return $pinId;
+    }
+
+    /**
+     * Registers a video upload with Pinterest, uploads the bytes to the
+     * returned pre-signed form, then polls until Pinterest finishes
+     * processing it. Returns the media_id to reference in a pin's
+     * media_source. See Pinterest's "Media" API docs — this is the same
+     * register -> upload -> poll shape Instagram's container flow uses.
+     */
+    public function registerAndUploadVideo(string $videoUrl, int $maxPolls = 20, int $pollDelaySeconds = 3): string
+    {
+        $this->requireAuth();
+
+        $register = Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post("{$this->baseUrl()}/media", ['media_type' => 'video']);
+
+        if ($register->failed()) {
+            throw new RuntimeException("Pinterest video media registration failed: {$register->body()}");
+        }
+
+        $mediaId = $register->json('media_id');
+        $uploadUrl = $register->json('upload_url');
+        $uploadParameters = $register->json('upload_parameters', []);
+
+        if (!$mediaId || !$uploadUrl) {
+            throw new RuntimeException('Pinterest did not return a media_id/upload_url.');
+        }
+
+        $videoBytes = Http::timeout(60)->get($videoUrl)->body();
+
+        $request = Http::timeout(120);
+        foreach ($uploadParameters as $key => $value) {
+            $request = $request->attach($key, (string) $value);
+        }
+        $request = $request->attach('file', $videoBytes, 'video.mp4');
+
+        $upload = $request->post($uploadUrl);
+
+        if ($upload->failed()) {
+            throw new RuntimeException("Pinterest video upload failed: {$upload->body()}");
+        }
+
+        for ($i = 0; $i < $maxPolls; $i++) {
+            $status = Http::withToken($this->accessToken)
+                ->timeout(30)
+                ->get("{$this->baseUrl()}/media/{$mediaId}")
+                ->json('status');
+
+            if ($status === 'succeeded') {
+                return $mediaId;
+            }
+
+            if ($status === 'failed') {
+                throw new RuntimeException('Pinterest video processing failed.');
+            }
+
+            sleep($pollDelaySeconds);
+        }
+
+        throw new RuntimeException('Pinterest video did not finish processing in time.');
+    }
+
+    /** Creates a video pin from an already-uploaded+processed media_id (see registerAndUploadVideo()). */
+    public function postVideoPinToBoard(string $title, ?string $description, ?string $link, string $mediaId, string $boardId, ?string $coverImageUrl = null): string
+    {
+        $this->requireAuth();
+
+        $response = Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post("{$this->baseUrl()}/pins", array_filter([
+                'board_id' => $boardId,
+                'title' => $title,
+                'description' => $description,
+                'link' => $link,
+                'media_source' => array_filter([
+                    'source_type' => 'video_id',
+                    'media_id' => $mediaId,
+                    'cover_image_url' => $coverImageUrl,
+                ]),
+            ]));
+
+        if ($response->failed()) {
+            throw new RuntimeException("Pinterest video pin creation failed: {$response->body()}");
+        }
+
+        $pinId = $response->json('id');
+        if (!$pinId) {
+            throw new RuntimeException('Pinterest response did not include a pin id.');
+        }
+
+        return $pinId;
+    }
+
     public function postPinToFirstBoard(StoryImagePrompt $imagePrompt): string
     {
         $this->boardId = $this->getFirstBoardId();

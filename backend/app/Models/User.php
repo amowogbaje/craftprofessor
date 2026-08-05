@@ -146,4 +146,19 @@ class User extends Authenticatable
     {
         return $this->socialAccounts()->where('provider', $provider)->first();
     }
+
+    public function ownedCauses(): HasMany
+    {
+        return $this->hasMany(Cause::class, 'owner_id');
+    }
+
+    public function causeMemberships(): HasMany
+    {
+        return $this->hasMany(CauseMember::class);
+    }
+
+    public function causeBroadcasts(): HasMany
+    {
+        return $this->hasMany(CauseBroadcast::class);
+    }
 }

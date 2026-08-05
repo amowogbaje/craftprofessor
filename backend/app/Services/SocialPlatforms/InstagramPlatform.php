@@ -5,6 +5,8 @@ namespace App\Services\SocialPlatforms;
 use App\Models\StoryImagePrompt;
 use App\Models\Video;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
+use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\PublishesVideos;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
 use Illuminate\Support\Facades\Http;
@@ -24,7 +26,7 @@ use RuntimeException;
  *    themselves, no bytes are uploaded from here.
  *  - Content publishing has a rate limit (25 posts/24h per IG account).
  */
-class InstagramPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos
+class InstagramPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos, PublishesRawImage, PublishesRawVideo
 {
     private const MAX_STATUS_POLLS = 10;
     private const POLL_DELAY_SECONDS = 3;
@@ -36,40 +38,65 @@ class InstagramPlatform extends AbstractSocialPlatform implements PublishesImage
 
     public function publishImage(StoryImagePrompt $imagePrompt): SocialPostResult
     {
+        $result = $this->publishRawImage(
+            (string) $imagePrompt->image_generated_url,
+            (string) $imagePrompt->pinterest_title,
+            $imagePrompt->pinterest_description,
+        );
+
+        $this->recordPost([
+            'story_image_prompt_id' => $imagePrompt->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawImage(string $imageUrl, string $title, ?string $details = null, ?string $linkUrl = null): SocialPostResult
+    {
         try {
             $containerId = $this->createContainer([
-                'image_url' => $imagePrompt->image_generated_url,
-                'caption' => $this->buildCaption($imagePrompt->pinterest_title, $imagePrompt->pinterest_description),
+                'image_url' => $imageUrl,
+                'caption' => $this->buildCaption($title, $details),
             ]);
 
-            $mediaId = $this->publishContainer($containerId);
-
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'posted', 'external_post_id' => $mediaId]);
-            return SocialPostResult::success($mediaId);
+            return SocialPostResult::success($this->publishContainer($containerId));
         } catch (\Throwable $e) {
-            $this->log()->error('InstagramPlatform: publishImage failed', ['error' => $e->getMessage()]);
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('InstagramPlatform: publishRawImage failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }
 
     public function publishVideo(Video $video): SocialPostResult
     {
+        $result = $this->publishRawVideo((string) $video->video_url, $video->caption ?? '');
+
+        $this->recordPost([
+            'video_id' => $video->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null): SocialPostResult
+    {
         try {
             $containerId = $this->createContainer([
                 'media_type' => 'REELS',
-                'video_url' => $video->video_url,
-                'caption' => $video->caption ?? '',
+                'video_url' => $videoUrl,
+                'caption' => $linkUrl ? "{$caption}\n\n{$linkUrl}" : $caption,
             ]);
 
             $this->waitForContainerReady($containerId);
-            $mediaId = $this->publishContainer($containerId);
 
-            $this->recordPost(['video_id' => $video->id, 'status' => 'posted', 'external_post_id' => $mediaId]);
-            return SocialPostResult::success($mediaId);
+            return SocialPostResult::success($this->publishContainer($containerId));
         } catch (\Throwable $e) {
-            $this->log()->error('InstagramPlatform: publishVideo failed', ['video_id' => $video->id, 'error' => $e->getMessage()]);
-            $this->recordPost(['video_id' => $video->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('InstagramPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }

@@ -35,7 +35,23 @@ class FlutterwaveService
      */
     public function initialize(User $user, int $amount, string $currency, int $coins, string $redirectUrl): array
     {
-        $txRef = 'coins_' . $user->id . '_' . Str::random(12) . '_' . now()->timestamp;
+        return $this->initializePayment($user, $amount, $currency, "{$coins} coins top-up", [
+            'user_id' => $user->id,
+            'coins' => $coins,
+        ], $redirectUrl, 'coins_');
+    }
+
+    /**
+     * Generic Flutterwave Standard checkout initializer — the coins top-up
+     * above and any other one-off fiat charge (e.g. Cause creation fees,
+     * see App\Services\Causes\CausePaymentService) both funnel through
+     * this so the tx_ref format / error handling only lives in one place.
+     *
+     * @return array{tx_ref: string, payment_link: string}
+     */
+    public function initializePayment(User $user, int $amount, string $currency, string $description, array $meta, string $redirectUrl, string $txRefPrefix = 'pay_'): array
+    {
+        $txRef = $txRefPrefix . $user->id . '_' . Str::random(12) . '_' . now()->timestamp;
 
         $response = Http::withToken($this->secretKey)
             ->timeout(30)
@@ -48,13 +64,10 @@ class FlutterwaveService
                     'email' => $user->email,
                     'name' => $user->name,
                 ],
-                'meta' => [
-                    'user_id' => $user->id,
-                    'coins' => $coins,
-                ],
+                'meta' => array_merge(['user_id' => $user->id], $meta),
                 'customizations' => [
-                    'title' => config('app.name') . ' Coins',
-                    'description' => "{$coins} coins top-up",
+                    'title' => config('app.name'),
+                    'description' => $description,
                 ],
             ]);
 

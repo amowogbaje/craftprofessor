@@ -197,3 +197,71 @@ export interface ApiErrorShape {
   required_coins?: number
   available_coins?: number
 }
+
+export type SocialProviderKey = 'pinterest' | 'linkedin' | 'twitter' | 'youtube' | 'instagram' | 'facebook'
+
+export type CauseStatus = 'pending_payment' | 'active' | 'paused' | 'archived'
+export type CausePaymentStatus = 'pending' | 'paid' | 'waived'
+export type CauseMemberStatus = 'invited' | 'joined' | 'declined' | 'opted_out'
+export type CauseBroadcastStatus = 'scheduled' | 'posted' | 'failed' | 'skipped'
+export type CauseMediaType = 'image' | 'video'
+
+export interface Cause {
+  id: number
+  owner_id: number
+  title: string
+  slug: string
+  description: string | null
+  goal: string | null
+  status: CauseStatus
+  creation_fee_amount: string
+  creation_fee_currency: string
+  payment_status: CausePaymentStatus
+  created_at: string
+  owner?: Pick<User, 'id' | 'name' | 'avatar_url'>
+  media?: CauseMedia[]
+  joined_members?: CauseMember[]
+  joined_members_count?: number
+  viewer_membership?: CauseMember | null
+}
+
+export interface CauseMedia {
+  id: number
+  cause_id: number
+  uploaded_by: number
+  title: string
+  details: string | null
+  url: string
+  type: CauseMediaType
+  link_url: string | null
+  created_at: string
+}
+
+export interface CauseMember {
+  id: number
+  cause_id: number
+  user_id: number
+  invited_by: number | null
+  status: CauseMemberStatus
+  joined_at: string | null
+  opted_out_at: string | null
+  user?: Pick<User, 'id' | 'name' | 'email' | 'avatar_url'>
+}
+
+export interface CauseBroadcast {
+  id: number
+  cause_id: number
+  cause_media_id: number
+  user_id: number
+  provider: SocialProviderKey
+  scheduled_by: number
+  scheduled_at: string
+  timezone: string
+  status: CauseBroadcastStatus
+  error: string | null
+  posted_at: string | null
+  media?: CauseMedia
+  cause?: Pick<Cause, 'id' | 'title' | 'slug'>
+  user?: Pick<User, 'id' | 'name' | 'avatar_url'>
+}
+

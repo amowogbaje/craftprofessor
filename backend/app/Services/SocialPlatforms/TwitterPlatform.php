@@ -4,6 +4,8 @@ namespace App\Services\SocialPlatforms;
 
 use App\Models\Video;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
+use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\PublishesVideos;
 use App\Services\SocialPlatforms\Contracts\PublishesText;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
@@ -25,7 +27,7 @@ use RuntimeException;
  *    Twitter's current docs before relying on it; the shape below is
  *    correct as of this writing but this endpoint has changed before.
  */
-class TwitterPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos, PublishesText
+class TwitterPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos, PublishesText, PublishesRawImage, PublishesRawVideo
 {
     private const MEDIA_UPLOAD_URL = 'https://upload.twitter.com/1.1/media/upload.json';
     private const TWEETS_URL = 'https://api.twitter.com/2/tweets';
@@ -37,33 +39,60 @@ class TwitterPlatform extends AbstractSocialPlatform implements PublishesImages,
 
     public function publishImage(StoryImagePrompt $imagePrompt): SocialPostResult
     {
+        $result = $this->publishRawImage(
+            (string) $imagePrompt->image_generated_url,
+            $imagePrompt->caption ?? $imagePrompt->pinterest_title ?? '',
+        );
+
+        $this->recordPost([
+            'story_image_prompt_id' => $imagePrompt->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawImage(string $imageUrl, string $title, ?string $details = null, ?string $linkUrl = null): SocialPostResult
+    {
         try {
-            $imageBytes = Http::timeout(30)->get($imagePrompt->image_generated_url)->body();
+            $imageBytes = Http::timeout(30)->get($imageUrl)->body();
             $mediaId = $this->uploadMediaSimple($imageBytes, 'image/jpeg');
 
-            $text = $imagePrompt->caption ?? $imagePrompt->pinterest_title ?? '';
-            $tweetId = $this->createTweet($text, [$mediaId]);
+            $text = trim(collect([$title, $details])->filter()->implode("\n\n")) ?: $title;
+            $tweetId = $this->createTweet($linkUrl ? "{$text}\n\n{$linkUrl}" : $text, [$mediaId]);
 
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'posted', 'external_post_id' => $tweetId]);
             return SocialPostResult::success($tweetId);
         } catch (\Throwable $e) {
-            $this->log()->error('TwitterPlatform: publishImage failed', ['error' => $e->getMessage()]);
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('TwitterPlatform: publishRawImage failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }
 
     public function publishVideo(Video $video): SocialPostResult
     {
-        try {
-            $mediaId = $this->uploadMediaChunked($video->video_url, 'video/mp4');
-            $tweetId = $this->createTweet($video->caption ?? '', [$mediaId]);
+        $result = $this->publishRawVideo((string) $video->video_url, $video->caption ?? '');
 
-            $this->recordPost(['video_id' => $video->id, 'status' => 'posted', 'external_post_id' => $tweetId]);
+        $this->recordPost([
+            'video_id' => $video->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null): SocialPostResult
+    {
+        try {
+            $mediaId = $this->uploadMediaChunked($videoUrl, 'video/mp4');
+            $tweetId = $this->createTweet($linkUrl ? "{$caption}\n\n{$linkUrl}" : $caption, [$mediaId]);
+
             return SocialPostResult::success($tweetId);
         } catch (\Throwable $e) {
-            $this->log()->error('TwitterPlatform: publishVideo failed', ['video_id' => $video->id, 'error' => $e->getMessage()]);
-            $this->recordPost(['video_id' => $video->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('TwitterPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }

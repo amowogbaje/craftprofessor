@@ -5,6 +5,8 @@ namespace App\Services\SocialPlatforms;
 use App\Models\StoryImagePrompt;
 use App\Models\Video;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
+use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\PublishesText;
 use App\Services\SocialPlatforms\Contracts\PublishesVideos;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
@@ -21,7 +23,7 @@ use RuntimeException;
  *    time (GET /me/accounts) and store that instead.
  *  - social_accounts.provider_user_id should hold the Page id.
  */
-class FacebookPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos, PublishesText
+class FacebookPlatform extends AbstractSocialPlatform implements PublishesImages, PublishesVideos, PublishesText, PublishesRawImage, PublishesRawVideo
 {
     public function name(): string
     {
@@ -30,47 +32,74 @@ class FacebookPlatform extends AbstractSocialPlatform implements PublishesImages
 
     public function publishImage(StoryImagePrompt $imagePrompt): SocialPostResult
     {
-        try {
-            $caption = trim(collect([$imagePrompt->pinterest_title, $imagePrompt->pinterest_description])->filter()->implode("\n\n"));
+        $result = $this->publishRawImage(
+            (string) $imagePrompt->image_generated_url,
+            (string) $imagePrompt->pinterest_title,
+            $imagePrompt->pinterest_description,
+            $imagePrompt->pinterest_link,
+        );
 
-            $response = $this->http()->post("{$this->baseUrl()}/photos", [
-                'url' => $imagePrompt->image_generated_url,
+        $this->recordPost([
+            'story_image_prompt_id' => $imagePrompt->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawImage(string $imageUrl, string $title, ?string $details = null, ?string $linkUrl = null): SocialPostResult
+    {
+        try {
+            $caption = trim(collect([$title, $details])->filter()->implode("\n\n"));
+
+            $response = $this->http()->post("{$this->baseUrl()}/photos", array_filter([
+                'url' => $imageUrl,
                 'caption' => $caption,
-                'link' => $imagePrompt->pinterest_link,
-            ]);
+                'link' => $linkUrl,
+            ]));
 
             if ($response->failed()) {
                 throw new RuntimeException("Facebook photo post failed: {$response->body()}");
             }
 
-            $postId = $response->json('post_id') ?? $response->json('id');
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'posted', 'external_post_id' => $postId]);
-            return SocialPostResult::success($postId);
+            return SocialPostResult::success($response->json('post_id') ?? $response->json('id'));
         } catch (\Throwable $e) {
-            $this->log()->error('FacebookPlatform: publishImage failed', ['error' => $e->getMessage()]);
-            $this->recordPost(['story_image_prompt_id' => $imagePrompt->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('FacebookPlatform: publishRawImage failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }
 
     public function publishVideo(Video $video): SocialPostResult
     {
+        $result = $this->publishRawVideo((string) $video->video_url, $video->caption ?? '');
+
+        $this->recordPost([
+            'video_id' => $video->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null): SocialPostResult
+    {
         try {
             $response = $this->http()->post("{$this->baseUrl()}/videos", [
-                'file_url' => $video->video_url,
-                'description' => $video->caption ?? '',
+                'file_url' => $videoUrl,
+                'description' => $linkUrl ? "{$caption}\n\n{$linkUrl}" : $caption,
             ]);
 
             if ($response->failed()) {
                 throw new RuntimeException("Facebook video post failed: {$response->body()}");
             }
 
-            $videoId = $response->json('id');
-            $this->recordPost(['video_id' => $video->id, 'status' => 'posted', 'external_post_id' => $videoId]);
-            return SocialPostResult::success($videoId);
+            return SocialPostResult::success($response->json('id'));
         } catch (\Throwable $e) {
-            $this->log()->error('FacebookPlatform: publishVideo failed', ['video_id' => $video->id, 'error' => $e->getMessage()]);
-            $this->recordPost(['video_id' => $video->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('FacebookPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }

@@ -54,3 +54,8 @@ Schedule::command('story:post-pinterest-pin')
 Schedule::command('content:publish-due')
     ->everyTenMinutes()
     ->withoutOverlapping();
+
+// Scheduler 5: post any due Cause broadcasts, every 5 minutes
+Schedule::command('causes:post-due')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();

@@ -3,6 +3,7 @@
 namespace App\Services\SocialPlatforms;
 
 use App\Models\Video;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\PublishesVideos;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
 use Illuminate\Support\Facades\Http;
@@ -20,7 +21,7 @@ use RuntimeException;
  *    for anything large/unreliable-network, switch to actually chunked
  *    resumable PUTs (send Content-Range per chunk) rather than one big PUT.
  */
-class YouTubePlatform extends AbstractSocialPlatform implements PublishesVideos
+class YouTubePlatform extends AbstractSocialPlatform implements PublishesVideos, PublishesRawVideo
 {
     public function name(): string
     {
@@ -29,24 +30,35 @@ class YouTubePlatform extends AbstractSocialPlatform implements PublishesVideos
 
     public function publishVideo(Video $video): SocialPostResult
     {
-        try {
-            $videoId = $this->upload($video);
+        $result = $this->publishRawVideo((string) $video->video_url, $video->caption ?? '', null, $video->title ?? 'Untitled');
 
-            $this->recordPost(['video_id' => $video->id, 'status' => 'posted', 'external_post_id' => $videoId]);
+        $this->recordPost([
+            'video_id' => $video->id,
+            'status' => $result->success ? 'posted' : 'failed',
+            'external_post_id' => $result->externalPostId,
+            'error' => $result->error,
+        ]);
+
+        return $result;
+    }
+
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null, string $title = 'Untitled'): SocialPostResult
+    {
+        try {
+            $videoId = $this->upload($videoUrl, $title, $linkUrl ? "{$caption}\n\n{$linkUrl}" : $caption);
             return SocialPostResult::success($videoId);
         } catch (\Throwable $e) {
-            $this->log()->error('YouTubePlatform: publishVideo failed', ['video_id' => $video->id, 'error' => $e->getMessage()]);
-            $this->recordPost(['video_id' => $video->id, 'status' => 'failed', 'error' => $e->getMessage()]);
+            $this->log()->error('YouTubePlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
             return SocialPostResult::failure($e->getMessage());
         }
     }
 
-    protected function upload(Video $video): string
+    protected function upload(string $videoUrl, string $title, string $description): string
     {
         $metadata = [
             'snippet' => [
-                'title' => $video->title ?? 'Untitled',
-                'description' => $video->caption ?? '',
+                'title' => $title,
+                'description' => $description,
                 'categoryId' => '24', // Entertainment
             ],
             'status' => [
@@ -69,7 +81,7 @@ class YouTubePlatform extends AbstractSocialPlatform implements PublishesVideos
             throw new RuntimeException('YouTube did not return a resumable upload URL.');
         }
 
-        $videoBytes = Http::timeout(60)->get($video->video_url)->body();
+        $videoBytes = Http::timeout(60)->get($videoUrl)->body();
 
         $upload = Http::withToken($this->account->access_token)
             ->withHeaders(['Content-Type' => 'video/mp4'])

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Coins, Film, LayoutGrid, LogOut, Settings, BookOpen, Layers, Link2, BarChart3, MoreHorizontal } from 'lucide-react'
+import { Coins, Film, LayoutGrid, LogOut, Settings, BookOpen, Layers, Link2, BarChart3, MoreHorizontal, Heart } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fetchWallet } from '@/lib/api-wallet'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Feed', icon: LayoutGrid },
   { to: '/stories', label: 'Stories', icon: BookOpen },
   { to: '/series', label: 'Series', icon: Layers },
+  { to: '/causes', label: 'Causes', icon: Heart },
   { to: '/stats', label: 'Stats', icon: BarChart3 },
   { to: '/settings/social-accounts', label: 'Socials', icon: Link2 },
   { to: '/settings', label: 'Publish limits', icon: Settings },

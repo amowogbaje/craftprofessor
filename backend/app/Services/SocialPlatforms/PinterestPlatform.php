@@ -5,6 +5,8 @@ namespace App\Services\SocialPlatforms;
 use App\Models\StoryImagePrompt;
 use App\Services\PinterestService;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
+use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
+use App\Services\SocialPlatforms\Contracts\PublishesRawVideo;
 use App\Services\SocialPlatforms\Contracts\SupportsMultipleBoards;
 use App\Services\SocialPlatforms\DTO\SocialPostResult;
 use Illuminate\Support\Collection;
@@ -17,7 +19,7 @@ use Illuminate\Support\Collection;
  * contract instead of the concrete PinterestService, and so "post the same
  * image to up to 3 boards" has a home that isn't the command itself.
  */
-class PinterestPlatform extends AbstractSocialPlatform implements PublishesImages, SupportsMultipleBoards
+class PinterestPlatform extends AbstractSocialPlatform implements PublishesImages, SupportsMultipleBoards, PublishesRawImage, PublishesRawVideo
 {
     public function name(): string
     {
@@ -39,6 +41,43 @@ class PinterestPlatform extends AbstractSocialPlatform implements PublishesImage
     {
         return $this->publishToBoards($imagePrompt)->first()
             ?? SocialPostResult::failure('No boards were available to post to.');
+    }
+
+    /**
+     * Cause-media / any raw-URL image, posted to this account's single
+     * best-guess board (its last-used/default board) rather than the
+     * up-to-3-board fan-out publishToBoards() does for StoryImagePrompt —
+     * a Cause broadcast fires once per member's account, not per board.
+     */
+    public function publishRawImage(string $imageUrl, string $title, ?string $details = null, ?string $linkUrl = null): SocialPostResult
+    {
+        try {
+            $pinterest = PinterestService::forAccount($this->account);
+            $boardId = $this->account->board_id ?? $pinterest->getLastBoardId();
+
+            $pinId = $pinterest->postRawImagePinToBoard($title, $details, $linkUrl, $imageUrl, $boardId);
+
+            return SocialPostResult::success($pinId);
+        } catch (\Throwable $e) {
+            $this->log()->error('PinterestPlatform: publishRawImage failed', ['error' => $e->getMessage()]);
+            return SocialPostResult::failure($e->getMessage());
+        }
+    }
+
+    public function publishRawVideo(string $videoUrl, string $caption, ?string $linkUrl = null): SocialPostResult
+    {
+        try {
+            $pinterest = PinterestService::forAccount($this->account);
+            $boardId = $this->account->board_id ?? $pinterest->getLastBoardId();
+
+            $mediaId = $pinterest->registerAndUploadVideo($videoUrl);
+            $pinId = $pinterest->postVideoPinToBoard($caption, null, $linkUrl, $mediaId, $boardId);
+
+            return SocialPostResult::success($pinId);
+        } catch (\Throwable $e) {
+            $this->log()->error('PinterestPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
+            return SocialPostResult::failure($e->getMessage());
+        }
     }
 
     /** @return Collection<int, SocialPostResult> one result per board posted to (up to 3). */
