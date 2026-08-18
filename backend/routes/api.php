@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\PublishSettingController;
 use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\StorySeriesController;
 use App\Http\Controllers\Api\StoryVerseImportController;
+use App\Http\Controllers\Api\StoryVideoController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\SocialAccountController;
@@ -87,6 +88,10 @@ Route::middleware('auth:api')->group(function () {
 
     // Video generation (image -> video)
     Route::post('/story-image-prompts/{imagePrompt}/video', [VideoController::class, 'store']);
+
+    // Full story video assembly (scenes + narration audio -> one video)
+    Route::post('/stories/{story}/video', [StoryVideoController::class, 'store']);
+    Route::get('/stories/{story}/video', [StoryVideoController::class, 'show']);
 
     // Publish limits
     Route::get('/publish-settings', [PublishSettingController::class, 'show']);

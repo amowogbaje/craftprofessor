@@ -37,6 +37,8 @@ export interface FeedItem {
   id: number
   url: string
   prompt?: string
+  narration?: string | null
+  scene_number?: number | null
   status: ContentStatus
   scheduled_at: string | null
   published_at: string | null
@@ -45,6 +47,18 @@ export interface FeedItem {
   source_image_prompt_id?: number
   pinterest_pin_id?: string | null
   sort_at: string
+}
+
+export interface StoryVideo {
+  id: number
+  story_id: number
+  video_url: string | null
+  duration_seconds: number | null
+  scene_count: number
+  status: 'pending' | 'processing' | 'ready' | 'failed'
+  last_generation_error: string | null
+  generation_attempts: number
+  generated_at: string | null
 }
 
 export interface Story {
@@ -59,6 +73,7 @@ export interface Story {
   prompt_generated: boolean
   image_prompts_count?: number
   series?: { id: number; title: string; slug: string } | null
+  video?: StoryVideo | null
   created_at: string
 }
 

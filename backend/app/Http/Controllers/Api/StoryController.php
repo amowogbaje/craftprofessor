@@ -44,7 +44,7 @@ class StoryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $stories = $request->user()->stories()
-            ->with('series:id,title,slug')
+            ->with('series:id,title,slug', 'video')
             ->withCount('imagePrompts')
             ->latest()
             ->paginate(20);

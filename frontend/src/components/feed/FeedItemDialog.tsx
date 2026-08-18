@@ -114,6 +114,15 @@ export function FeedItemDialog({ item, onClose }: { item: FeedItem | null; onClo
           )}
         </div>
 
+        {item.narration && (
+          <div className="rounded-md border border-border bg-secondary/50 px-3 py-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {typeof item.scene_number === 'number' ? `Scene ${item.scene_number} narration` : 'Narration'}
+            </p>
+            <p className="mt-1 text-sm">{item.narration}</p>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"

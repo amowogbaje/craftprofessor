@@ -9,13 +9,14 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Scheduler 2 — picks the next story with story_text set and
- * prompt_generated = false, and generates its 10 image prompts +
- * Pinterest metadata via ImageGeneratorService::generatePromptsForStory().
+ * prompt_generated = false, and generates its scene prompts (variable
+ * count, decided per-story by ImagePromptAgent) + narration + Pinterest
+ * metadata via ImageGeneratorService::generatePromptsForStory().
  */
 class GenerateImagePrompts extends Command
 {
     protected $signature = 'story:generate-image-prompts';
-    protected $description = 'Generate the 10 image prompts + pinterest metadata for the next ready story.';
+    protected $description = 'Generate the scene prompts + narration + pinterest metadata for the next ready story.';
 
     public function handle(ImageGeneratorService $service): int
     {

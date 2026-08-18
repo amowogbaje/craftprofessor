@@ -197,7 +197,7 @@ return [
     |
     */
 
-    'default_image_provider' => env('IMAGE_PROVIDER', 'default'), // default | cloudflare | together
+    'default_image_provider' => env('IMAGE_PROVIDER', 'default'), // default | cloudflare | together | agnes
 
     'image_providers' => [
         'cloudflare' => [
@@ -208,6 +208,66 @@ return [
         'together' => [
             'key' => env('TOGETHER_API_KEY'),
             'model' => env('TOGETHER_IMAGE_MODEL', 'black-forest-labs/FLUX.1-schnell'),
+        ],
+        // Agnes AI — OpenAI-compatible, free-tier, and unlike Cloudflare's
+        // SDXL model it actually accepts reference image URLs, which is
+        // what solves character/environment/prop consistency across scenes.
+        // Opt-in: set IMAGE_PROVIDER=agnes. Cloudflare/together stay
+        // available as an instant rollback by changing that one var back.
+        'agnes' => [
+            'key' => env('AGNES_API_KEY'),
+            'base_url' => env('AGNES_BASE_URL', 'https://apihub.agnes-ai.com/v1'),
+            'model' => env('AGNES_IMAGE_MODEL', 'agnes-image-2.1-flash'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Video Providers (NOT native Laravel\Ai drivers)
+    |--------------------------------------------------------------------------
+    |
+    | Powers App\Ai\Contracts\VideoProviderContract, bound in
+    | AppServiceProvider. 'veo' (Vertex AI, config('ai.providers.veo') above)
+    | is the default and unaffected by anything below unless VIDEO_PROVIDER
+    | is explicitly set.
+    |
+    */
+
+    'default_video_provider' => env('VIDEO_PROVIDER', 'veo'), // veo | agnes
+
+    'video_providers' => [
+        'agnes' => [
+            'key' => env('AGNES_API_KEY'),
+            'base_url' => env('AGNES_BASE_URL', 'https://apihub.agnes-ai.com/v1'),
+            'model' => env('AGNES_VIDEO_MODEL', 'agnes-video-v2.0'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Narration Text-to-Speech Providers
+    |--------------------------------------------------------------------------
+    |
+    | Powers App\Ai\Contracts\TtsProviderContract, bound in AppServiceProvider.
+    | Used to turn each scene's `narration` line (see ImagePromptAgent) into
+    | spoken audio for the assembled story video.
+    |
+    */
+
+    'default_tts_provider' => env('TTS_PROVIDER', 'openai'), // openai | eleven
+
+    'tts_providers' => [
+        'openai' => [
+            'key' => env('OPENAI_API_KEY'),
+            'base_url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
+            'model' => env('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
+            'voice' => env('OPENAI_TTS_VOICE', 'alloy'),
+        ],
+        'eleven' => [
+            'key' => env('ELEVENLABS_API_KEY'),
+            'voice_id' => env('ELEVENLABS_VOICE_ID'),
+            'base_url' => env('ELEVENLABS_BASE_URL', 'https://api.elevenlabs.io/v1'),
+            'model' => env('ELEVENLABS_MODEL', 'eleven_multilingual_v2'),
         ],
     ],
 

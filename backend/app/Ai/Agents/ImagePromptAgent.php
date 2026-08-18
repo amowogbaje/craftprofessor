@@ -12,8 +12,10 @@ use Laravel\Ai\Promptable;
 
 /**
  * Reads a story's text + known characters and asks the model for a
- * structured batch of character portrait prompts, 10 scene image prompts,
- * and Pinterest-ready metadata for each scene.
+ * structured batch of character/environment/prop reference prompts, plus
+ * however many scene prompts the story's actual beats call for (no longer
+ * a fixed count — see schema()), each with its own narration line for
+ * voiceover and Pinterest-ready metadata.
  *
  * Story context is bound via the constructor (like a one-shot report, not a
  * conversation), so instructions() carries the full brief and prompt() is
@@ -22,6 +24,15 @@ use Laravel\Ai\Promptable;
 class ImagePromptAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
+
+    /**
+     * Bounds on how many scenes a single story can produce in one batch.
+     * The model decides the actual count within this range based on the
+     * story's real beats — short stories get fewer scenes, long/eventful
+     * ones get more, instead of every story being forced into exactly 10.
+     */
+    protected const MIN_SCENES = 4;
+    protected const MAX_SCENES = 20;
 
     public function __construct(
         protected Story $story,
@@ -63,11 +74,17 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
+        $minScenes = self::MIN_SCENES;
+        $maxScenes = self::MAX_SCENES;
+
         return <<<INSTRUCTIONS
-        You are an art director and social media strategist turning a written
-        story into a batch of scroll-stopping image generation prompts for a
-        text-to-image AI model, destined for Pinterest. Respond ONLY with
-        valid JSON matching the requested schema. No commentary.
+        You are an art director, video storyboard artist, and social media
+        strategist turning a written story into a full scene-by-scene
+        storyboard: a batch of image generation prompts (one per scene, for
+        a text-to-image AI model) each paired with a voiceover narration
+        line, so the finished scenes can be stitched into a narrated video.
+        The same batch also feeds Pinterest still-image posts. Respond ONLY
+        with valid JSON matching the requested schema. No commentary.
 
         STORY TEXT:
         {$this->story->story_text}
@@ -93,18 +110,30 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           window light, golden hour) — never flat or evenly lit.
         - Skin, fabric, and environment textures are hyper-detailed and
           tactile. Expressions are raw and specific (not generic smiling).
-        - Vary camera framing across the 10 scene prompts: mix close-up,
+        - Vary camera framing across the scene prompts: mix close-up,
           over-the-shoulder, low-angle hero shots, and wide establishing
           shots so the batch doesn't feel repetitive.
 
+        SCENE COUNT — this is a full scene-by-scene retelling of the story
+        for video, not a curated highlight reel:
+        - Break the story into as many scenes as its actual beats need —
+          every meaningful story beat (a new setting, a turning point, a
+          new action, a shift in emotion or stakes) should get its own
+          scene, in story order.
+        - Produce no fewer than {$minScenes} and no more than {$maxScenes}
+          scenes. A short, simple story should land near the low end; a
+          long or eventful one should land near the high end. Don't pad to
+          hit a higher number, and don't compress distinct beats together
+          just to hit a lower one.
+
         INSTRUCTION RULES:
-        1. Produce a "characters" array for every character appearing in the 10 scene prompts.
+        1. Produce a "characters" array for every character appearing in any scene prompt.
         - If a character is marked "LOCKED" in the reference list, you MUST
             reuse that name exactly and NOT provide a new image_prompt.
         - If a character is marked "NEED_DESIGN" or is new, you MUST provide a detailed
             image_prompt.
         2. Produce an "environments" array for every recurring named
-           setting/location appearing in 2 or more of the 10 scene prompts
+           setting/location appearing in 2 or more scene prompts
            (a location used only once doesn't need its own tracked entry —
            just describe it inline in that scene's prompt instead).
         - Same LOCKED/NEED_DESIGN reuse rule as characters above.
@@ -112,7 +141,8 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
            same 2-or-more-scenes threshold and LOCKED/NEED_DESIGN reuse rule
            as environments. Leave this array empty if nothing qualifies;
            don't force it.
-        4. Produce a "prompts" array of exactly 10 scene prompts.
+        4. Produce a "prompts" array covering the whole story in order, per
+           the SCENE COUNT rules above.
         - Use the exact names from the "characters"/"environments"/"props"
           arrays for consistency.
         - Every image prompt MUST end with the literal note: "(for AI image generation, upload-ready)".
@@ -120,15 +150,27 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           itself — text rendered by diffusion models is unreliable. Any
           caption is generated separately (see "caption" field) and will be
           overlaid on the finished image by our own rendering code.
-        5. Caption selectivity — NOT every scene should have a caption.
+        5. Every scene MUST have a "narration" line — this is the voiceover
+           script read aloud over that scene once scenes are stitched into
+           a video with audio, so together the narration lines across all
+           scenes should read as the complete story being told/narrated
+           beat by beat, not just a caption or a mood line.
+        - Written in third-person storyteller voice unless the story itself
+          is first-person, matching the story's own tone.
+        - Concise enough to comfortably read aloud in the time one scene
+          would hold on screen (roughly 1-3 sentences per scene).
+        - Never break narration across scenes mid-sentence — each scene's
+          narration should be a complete thought on its own.
+        6. Caption selectivity — NOT every scene should have a caption.
         - Set "caption" to null for scenes that are strong purely as an
           image (a striking expression, an establishing shot, a beautiful
           wide shot) — text would clutter these.
-        - Only write a caption for scenes where a line of dialogue, internal
-          narration, or an ominous statement genuinely amplifies the drama
-          or creates a real curiosity gap (raises a question the viewer
-          wants answered without resolving it).
-        - Aim for roughly 4-6 of the 10 scenes to carry a caption, not all 10.
+        - Only write a caption for scenes where a short punchy line
+          genuinely amplifies the drama or creates a real curiosity gap
+          (raises a question the viewer wants answered without resolving
+          it). This is separate from "narration" (rule 5) — caption is a
+          short on-screen text overlay, narration is the full spoken line.
+        - Aim for roughly 40-60% of scenes to carry a caption, not all of them.
         - When you DO write a caption, compose the scene prompt so there's
           natural negative space (sky, shadow, blurred background, empty
           wall/floor) where the caption can sit later without covering the
@@ -174,8 +216,10 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           entirely for scenes in a one-off, untracked location).
         - prop_names: array of prop name strings featured in the scene
           (only names from the "props" array — omit if none).
+        - narration: the voiceover script line for this scene, following
+          rule 5 above. Required, never null or empty.
         - caption: nullable. A short, punchy line (6-14 words) in the voice
-          of the story, following rule 5 above. No hashtags, no emoji, no
+          of the story, following rule 6 above. No hashtags, no emoji, no
           quotation marks — just the line itself, or null.
         - pinterest_title: punchy, scroll-stopping title (under 100 chars)
           that complements (doesn't repeat) the caption.
@@ -216,13 +260,14 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                 ->required(),
 
             'prompts' => $schema->array()
-                ->min(10)->max(10)
+                ->min(self::MIN_SCENES)->max(self::MAX_SCENES)
                 ->items(
                     $schema->object(fn (JsonSchema $s) => [
                         'prompt' => $s->string()->required(),
                         'character_names' => $s->array()->items($s->string())->required(),
                         'environment_names' => $s->array()->items($s->string())->nullable(),
                         'prop_names' => $s->array()->items($s->string())->nullable(),
+                        'narration' => $s->string()->required(),
                         'caption' => $s->string()->nullable(),
                         'pinterest_title' => $s->string()->required(),
                         'pinterest_description' => $s->string()->required(),
