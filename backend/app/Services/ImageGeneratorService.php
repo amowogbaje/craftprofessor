@@ -35,18 +35,24 @@ class ImageGeneratorService
         $existingProps = $story->knownProps()->get();
 
         $user = $story->user;
-        $batchCost = (int) config('coins.costs.image_prompt') * 10; // schema always returns exactly 10 prompts
+        $perSceneCost = (int) config('coins.costs.image_prompt');
 
-        if ($user) {
-            if (!$this->wallet->canAfford($user, $batchCost)) {
-                Log::info('ImageGeneratorService: skipping prompt generation, insufficient coins', [
-                    'story_id' => $story->id, 'user_id' => $user->id, 'required' => $batchCost,
-                ]);
-                return;
-            }
+        // The agent now decides the scene count per story (see
+        // ImagePromptAgent::MIN_SCENES/MAX_SCENES) instead of always
+        // returning exactly 10, so we can't know the real cost until after
+        // generation. Gate on the worst case (MAX_SCENES) up front so we
+        // never call the agent for a user who couldn't afford any result,
+        // then debit only the actual count once we know it below.
+        $worstCaseCost = $perSceneCost * ImagePromptAgent::MAX_SCENES;
 
-            $this->wallet->debit($user, $batchCost, 'image_prompt', $story);
+        if ($user && !$this->wallet->canAfford($user, $worstCaseCost)) {
+            Log::info('ImageGeneratorService: skipping prompt generation, insufficient coins', [
+                'story_id' => $story->id, 'user_id' => $user->id, 'required' => $worstCaseCost,
+            ]);
+            return;
         }
+
+        $debitedAmount = 0;
 
         try {
             $story->imagePrompts()->delete();
@@ -60,6 +66,21 @@ class ImageGeneratorService
                 throw new \RuntimeException('ImagePromptAgent returned no prompts.');
             }
 
+            $batchCost = $perSceneCost * count($prompts);
+
+            if ($user) {
+                if (!$this->wallet->canAfford($user, $batchCost)) {
+                    Log::info('ImageGeneratorService: insufficient coins for actual scene count, skipping', [
+                        'story_id' => $story->id, 'user_id' => $user->id,
+                        'scene_count' => count($prompts), 'required' => $batchCost,
+                    ]);
+                    return;
+                }
+
+                $this->wallet->debit($user, $batchCost, 'image_prompt', $story);
+                $debitedAmount = $batchCost;
+            }
+
             $charactersByName = $this->reconcileAssets(
                 Character::class, $response['characters'] ?? [], $story, $existingCharacters
             );
@@ -70,7 +91,7 @@ class ImageGeneratorService
                 Prop::class, $response['props'] ?? [], $story, $existingProps
             );
 
-            foreach ($prompts as $entry) {
+            foreach ($prompts as $index => $entry) {
                 $characterIds = $this->resolveIds($entry['character_names'] ?? [], $charactersByName, $story, 'character');
                 $environmentIds = $this->resolveIds($entry['environment_names'] ?? [], $environmentsByName, $story, 'environment');
                 $propIds = $this->resolveIds($entry['prop_names'] ?? [], $propsByName, $story, 'prop');
@@ -79,6 +100,8 @@ class ImageGeneratorService
                     'user_id' => $story->user_id,
                     'story_id' => $story->id,
                     'prompt' => $entry['prompt'],
+                    'narration' => $entry['narration'] ?? null,
+                    'scene_number' => $index + 1,
                     'caption' => $entry['caption'] ?? null,
                     'status' => StoryImagePrompt::STATUS_PUBLISHED,
                     'prompt_coin_cost' => (int) config('coins.costs.image_prompt'),
@@ -103,8 +126,8 @@ class ImageGeneratorService
                 'prompt_count' => count($prompts),
             ]);
         } catch (\Throwable $e) {
-            if ($user) {
-                $this->wallet->refund($user, $batchCost, 'image_prompt', $story, ['error' => $e->getMessage()]);
+            if ($user && $debitedAmount > 0) {
+                $this->wallet->refund($user, $debitedAmount, 'image_prompt', $story, ['error' => $e->getMessage()]);
             }
 
             Log::error('ImageGeneratorService::generatePromptsForStory failed', [

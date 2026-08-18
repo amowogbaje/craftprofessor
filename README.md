@@ -67,3 +67,56 @@ build step, exactly as before.
 - `backend`: tracked outbound links + click stats (`GET /r`, `GET /api/link-stats`).
 - `frontend`: `/series` (StoryVerse import UI) and `/stats` (click analytics) pages,
   both re-enabled/added in the sidebar nav.
+
+## Story → scenes → video pipeline
+
+Stories no longer generate a fixed batch of 10 image prompts. `ImagePromptAgent`
+now decides a variable scene count (4–20) per story based on its actual beats,
+and every scene carries a `narration` line (the voiceover script for that
+scene) alongside its image prompt.
+
+**New pieces, in pipeline order:**
+
+1. `story:generate-image-prompts` (unchanged trigger) — now produces N scenes
+   + narration lines instead of a fixed 10.
+2. `story:generate-images` (unchanged) — generates each scene's still image.
+3. `story:generate-narration-audio` (new, every 15 min) — turns each scene's
+   `narration` into an mp3 via `NarrationAudioService` + `TtsProviderContract`
+   (OpenAI by default, ElevenLabs as an alternative — set `TTS_PROVIDER`).
+4. `POST /api/story-image-prompts/{id}/video` (unchanged) — optional, animates
+   an individual scene's still image into a motion clip via `VideoProviderContract`
+   (Veo by default, Agnes AI as an opt-in alternative — set `VIDEO_PROVIDER`).
+5. `POST /api/stories/{id}/video` (new) — assembles the whole story into one
+   final video via `StoryVideoAssemblyService`: orders scenes, uses each
+   scene's motion clip if step 4 ran for it (otherwise a Ken Burns pan over
+   the still image), times each segment to match its narration length, and
+   muxes everything together with narration audio.
+
+**Image/video provider switching** (Cloudflare/Together/Agnes for images,
+Veo/Agnes for video) is a single env var each — `IMAGE_PROVIDER` and
+`VIDEO_PROVIDER` — with the existing behavior as the default in both cases.
+See `.env.example` for all new variables (`AGNES_*`, `TTS_PROVIDER`,
+`OPENAI_TTS_*`, `ELEVENLABS_*`, `COIN_COST_NARRATION_AUDIO`).
+
+⚠️ **Agnes AI is unverified against a live account.** The provider classes
+(`AgnesAiImageProvider`, `AgnesAiVideoProvider`) are built from Agnes' public
+docs, not exercised against a real key — test in staging before relying on
+it, and treat the API key as a low-trust, easily-revocable credential
+regardless.
+
+### Deployment requirements this pipeline adds
+
+- **`ffmpeg` and `ffprobe` must be installed on the server** running the
+  `videos` queue worker (`apt-get install ffmpeg` covers both). Used by
+  `NarrationAudioService` (duration probing) and `StoryVideoAssemblyService`
+  (segment building, concatenation, muxing) via `Illuminate\Support\Facades\Process`.
+- **New migrations** — run `php artisan migrate`:
+  - `add_narration_and_scene_number_to_story_image_prompts`
+  - `add_narration_audio_to_story_image_prompts`
+  - `create_story_videos_table`
+- **New queue work** — `AssembleStoryVideoJob` runs on the `videos` queue
+  (same one `GenerateVideoJob` already uses) with a 900s timeout; make sure
+  your queue worker's own timeout/`retry_after` isn't shorter than that.
+- **Storage** — narration audio and assembled videos are written to the
+  `public` disk (`narration-audio/`, `story-videos-full/`), same as existing
+  generated images/videos. No new disk config needed if that's already set up.

@@ -53,12 +53,22 @@ export function FeedItemCard({ item, onClick }: { item: FeedItem; onClick: () =>
           )}
         </div>
 
+        {typeof item.scene_number === 'number' && (
+          <div className="absolute left-2 top-2 rounded-sm border border-border/80 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground backdrop-blur-sm">
+            Scene {item.scene_number}
+          </div>
+        )}
+
         <div className="absolute bottom-2 left-2 right-2 flex justify-start">
           <StatusChip status={item.status} scheduledAt={item.scheduled_at} />
         </div>
       </div>
 
-      {item.prompt && <p className="line-clamp-2 px-3 py-2 text-xs text-muted-foreground">{item.prompt}</p>}
+      {item.narration ? (
+        <p className="line-clamp-2 px-3 py-2 text-xs text-muted-foreground">{item.narration}</p>
+      ) : (
+        item.prompt && <p className="line-clamp-2 px-3 py-2 text-xs text-muted-foreground">{item.prompt}</p>
+      )}
     </button>
   )
 }

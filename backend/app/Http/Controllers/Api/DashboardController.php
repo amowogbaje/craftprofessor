@@ -44,6 +44,8 @@ class DashboardController extends Controller
                 image_generated_url as url,
                 pinterest_pin_id,
                 prompt,
+                narration,
+                scene_number,
                 status,
                 scheduled_at,
                 published_at,
@@ -77,24 +79,27 @@ class DashboardController extends Controller
 
         $videos = DB::table('videos')
             ->selectRaw("
-                id,
+                videos.id,
                 'video' as type,
                 video_url as url,
                 NULL as prompt,
-                status,
-                scheduled_at,
-                published_at,
+                sip.narration as narration,
+                sip.scene_number as scene_number,
+                videos.status,
+                videos.scheduled_at,
+                videos.published_at,
                 NULL as story_id,
                 NULL as pinterest_pin_id,
-                story_image_prompt_id as source_image_prompt_id,
+                videos.story_image_prompt_id as source_image_prompt_id,
                 NULL as has_video,
-                COALESCE(generated_at, created_at) as sort_at
+                COALESCE(videos.generated_at, videos.created_at) as sort_at
             ")
-            ->where('user_id', $user->id)
+            ->leftJoin('story_image_prompts as sip', 'sip.id', '=', 'videos.story_image_prompt_id')
+            ->where('videos.user_id', $user->id)
             ->whereNotNull('video_url');
 
         if ($status !== 'all') {
-            $videos->where('status', $status);
+            $videos->where('videos.status', $status);
         }
 
         /*
@@ -199,6 +204,7 @@ class DashboardController extends Controller
     {
         return [
             'type' => 'image', 'id' => $p->id, 'url' => $p->image_generated_url, 'prompt' => $p->prompt,
+            'narration' => $p->narration, 'scene_number' => $p->scene_number,
             'status' => $p->status, 'scheduled_at' => $p->scheduled_at, 'published_at' => $p->published_at,
             'story_id' => $p->story_id, 'has_video' => $p->videoPrompt()->exists(),
             'sort_at' => $p->generated_at ?? $p->created_at,
@@ -209,6 +215,7 @@ class DashboardController extends Controller
     {
         return [
             'type' => 'video', 'id' => $v->id, 'url' => $v->video_url,
+            'narration' => $v->imagePrompt?->narration, 'scene_number' => $v->imagePrompt?->scene_number,
             'source_image_prompt_id' => $v->story_image_prompt_id, 'status' => $v->status,
             'scheduled_at' => $v->scheduled_at, 'published_at' => $v->published_at,
             'sort_at' => $v->generated_at ?? $v->created_at,

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Support\Collection;
 
 class StoryImagePrompt extends Model
@@ -33,6 +34,11 @@ class StoryImagePrompt extends Model
         'user_id',
         'story_id',
         'prompt',
+        'narration',
+        'narration_audio_url',
+        'narration_audio_seconds',
+        'last_narration_error',
+        'scene_number',
         'image_generated_url',
         'image_generated_url_quality',
         'status',
@@ -59,6 +65,7 @@ class StoryImagePrompt extends Model
         'main_character_ids' => 'array',
         'main_environment_ids' => 'array',
         'main_prop_ids' => 'array',
+        'narration_audio_seconds' => 'float',
         'generated_at' => 'datetime',
         'scheduled_at' => 'datetime',
         'published_at' => 'datetime',
@@ -91,7 +98,7 @@ class StoryImagePrompt extends Model
         return $this->hasOne(VideoPrompt::class);
     }
 
-    public function video(): HasOne
+    public function video(): HasOneThrough
     {
         return $this->hasOneThrough(
             Video::class,
@@ -126,6 +133,14 @@ class StoryImagePrompt extends Model
         return $query->whereNotNull('image_generated_url')->where('status', self::STATUS_PUBLISHED)->where('posted_to_pinterest', false);
     }
 
+    /** Narration text exists but hasn't been turned into audio yet. */
+    public function scopeAwaitingNarrationAudio($query)
+    {
+        return $query->whereNotNull('narration')
+            ->whereNull('narration_audio_url')
+            ->where('generation_attempts', '<', config('images.max_generation_attempts', 5));
+    }
+
     public function scopePublished($query)
     {
         return $query->where('status', self::STATUS_PUBLISHED);
@@ -139,6 +154,12 @@ class StoryImagePrompt extends Model
     public function scopeDueForPublishing($query)
     {
         return $query->where('status', self::STATUS_SCHEDULED)->where('scheduled_at', '<=', now());
+    }
+
+    /** Story reading/playback order — scenes are generated in story order. */
+    public function scopeOrdered($query)
+    {
+        return $query->orderBy('scene_number');
     }
 
     public function mainCharacters(): Collection

@@ -10,6 +10,7 @@ import { apiErrorMessage } from '@/lib/http'
 import { useToast } from '@/components/ui/use-toast'
 import { Input } from '@/components/ui/input'
 import { LoadMoreButton } from '@/components/LoadMoreButton'
+import { StoryVideoAction } from '@/components/stories/StoryVideoAction'
 
 
 export function StoriesPage() {
@@ -97,7 +98,7 @@ export function StoriesPage() {
           <>
             {stories.map((story) => (
               <Card key={story.id}>
-                <CardContent className="flex items-center justify-between gap-4 py-4">
+                <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm">
                       {story.user_supplied_text?.slice(0, 140) ?? story.story_link ?? 'Untitled story'}
@@ -107,9 +108,12 @@ export function StoriesPage() {
                       {new Date(story.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <Badge variant={story.prompt_generated ? 'success' : 'secondary'}>
-                    {story.prompt_generated ? `${story.image_prompts_count ?? 0} PROMPTS` : 'PROCESSING'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={story.prompt_generated ? 'success' : 'secondary'}>
+                      {story.prompt_generated ? `${story.image_prompts_count ?? 0} SCENES` : 'PROCESSING'}
+                    </Badge>
+                    <StoryVideoAction story={story} />
+                  </div>
                 </CardContent>
               </Card>
             ))}

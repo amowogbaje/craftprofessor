@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Story extends Model
 {
@@ -73,6 +74,12 @@ class Story extends Model
     public function imagePrompts(): HasMany
     {
         return $this->hasMany(StoryImagePrompt::class);
+    }
+
+    /** The final assembled scene-by-scene video with narration audio (see StoryVideoAssemblyService). */
+    public function video(): HasOne
+    {
+        return $this->hasOne(StoryVideo::class);
     }
 
     public function isPartOfSeries(): bool

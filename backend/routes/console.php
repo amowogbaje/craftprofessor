@@ -29,6 +29,12 @@ Schedule::command('story:generate-images --limit=5 --time-budget=50')
     ->withoutOverlapping(10)
     ->runInBackground();
 
+// Scheduler 2b: narration audio for scenes, independent of the image queue above
+Schedule::command('story:generate-narration-audio --limit=10')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->runInBackground();
+
 // Scheduler 3a: refresh Pinterest tokens ~10 min before the posting window
 // opens, with a buffer wide enough to cover the whole window below (23:00
 // through 03:00 = up to 4h, so 300 min / 5h of headroom).

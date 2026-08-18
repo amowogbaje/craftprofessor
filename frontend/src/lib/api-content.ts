@@ -1,5 +1,5 @@
 import { api } from './http'
-import type { ContentStatus, FeedItem, Paginated, Story, StorySeries, StoryVerseImportResult } from './types'
+import type { ContentStatus, FeedItem, Paginated, Story, StorySeries, StoryVerseImportResult, StoryVideo } from './types'
 
 export async function fetchFeed(type: 'all' | 'image' | 'video', status: 'all' | ContentStatus) {
   const { data } = await api.get<{ data: FeedItem[] }>('/dashboard/feed', { params: { type, status } })
@@ -54,4 +54,14 @@ export async function createSeries(links: string[], title?: string, description?
 export async function importStoryVerseSeries(url: string) {
   const { data } = await api.post<StoryVerseImportResult>('/story-series/import-storyverse', { url })
   return data
+}
+
+export async function requestStoryVideo(storyId: number) {
+  const { data } = await api.post<{ message: string; data: StoryVideo }>(`/stories/${storyId}/video`)
+  return data
+}
+
+export async function fetchStoryVideo(storyId: number) {
+  const { data } = await api.get<{ data: StoryVideo }>(`/stories/${storyId}/video`)
+  return data.data
 }

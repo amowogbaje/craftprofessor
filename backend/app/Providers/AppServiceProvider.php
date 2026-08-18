@@ -24,7 +24,44 @@ class AppServiceProvider extends ServiceProvider
                     config('ai.image_providers.together.key'),
                     config('ai.image_providers.together.model'),
                 ),
+                // Opt-in only — set IMAGE_PROVIDER=agnes in .env to try it.
+                // Cloudflare/together/default all remain one env-var edit away.
+                'agnes' => new \App\Ai\Providers\AgnesAiImageProvider(
+                    config('ai.image_providers.agnes.key'),
+                    config('ai.image_providers.agnes.base_url'),
+                    config('ai.image_providers.agnes.model'),
+                ),
                 default => $app->make(\App\Ai\Agents\ImageGeneratorAgent::class),
+            };
+        });
+
+        $this->app->bind(\App\Ai\Contracts\VideoProviderContract::class, function ($app) {
+            return match (config('ai.default_video_provider')) {
+                // Opt-in only — set VIDEO_PROVIDER=agnes in .env to try it.
+                // Leave unset (or 'veo') to keep using Vertex AI Veo.
+                'agnes' => new \App\Ai\Providers\AgnesAiVideoProvider(
+                    config('ai.video_providers.agnes.key'),
+                    config('ai.video_providers.agnes.base_url'),
+                    config('ai.video_providers.agnes.model'),
+                ),
+                default => $app->make(\App\Ai\Providers\VeoVideoProvider::class),
+            };
+        });
+
+        $this->app->bind(\App\Ai\Contracts\TtsProviderContract::class, function ($app) {
+            return match (config('ai.default_tts_provider')) {
+                'eleven' => new \App\Ai\Providers\ElevenLabsTtsProvider(
+                    config('ai.tts_providers.eleven.key'),
+                    config('ai.tts_providers.eleven.voice_id'),
+                    config('ai.tts_providers.eleven.base_url'),
+                    config('ai.tts_providers.eleven.model'),
+                ),
+                default => new \App\Ai\Providers\OpenAiTtsProvider(
+                    config('ai.tts_providers.openai.key'),
+                    config('ai.tts_providers.openai.base_url'),
+                    config('ai.tts_providers.openai.model'),
+                    config('ai.tts_providers.openai.voice'),
+                ),
             };
         });
     }
