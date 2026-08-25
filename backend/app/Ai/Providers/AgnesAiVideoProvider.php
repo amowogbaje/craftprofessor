@@ -54,7 +54,7 @@ class AgnesAiVideoProvider implements VideoProviderContract
                 'prompt' => $motionPrompt,
                 'extra_body' => [
                     'image' => [$sourceImageUrl],
-                    'mode' => 'image-to-video',
+                    'mode' => 'ti2vid',
                 ],
             ]);
 
