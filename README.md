@@ -12,6 +12,44 @@ backend-only commit doesn't rebuild/redeploy the frontend and vice versa.
 You can also force either or both from the Actions tab via
 "Run workflow" (`workflow_dispatch`).
 
+## Running locally with Docker
+
+```
+cp backend/.env.example backend/.env   # skip if you already have one
+# fill in whatever AI provider keys you want to test (GEMINI_API_KEY at
+# minimum) — the DB_*/QUEUE_CONNECTION values are overridden automatically
+# for the container network, don't worry about those
+docker compose up --build
+```
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- MySQL: localhost:3306 (`craftprofessor` / `craftprofessor` by default — handy for connecting a GUI client)
+
+Five services: `mysql`, `backend` (`php artisan serve`), `queue`
+(`php artisan queue:work`, runs `AssembleStoryVideoJob`/`GenerateVideoJob`),
+`scheduler` (runs `php artisan schedule:run` every minute — the
+`story:generate-*` commands from the pipeline below), and `frontend` (Vite
+dev server). First boot installs composer/npm dependencies and runs
+migrations automatically (see `backend/docker/entrypoint.sh`) — takes a
+couple of minutes the first time, then starts instantly after that since
+`vendor/`/`node_modules` live in named Docker volumes, not your bind mount.
+
+Your actual backend code is bind-mounted in, so edits to `backend/` or
+`frontend/` take effect without rebuilding — `docker compose restart backend`
+(or just wait for Vite's hot reload on the frontend side) after a change
+that needs a fresh process. Editing `backend/.env` needs a
+`docker compose restart backend queue scheduler` to pick up.
+
+If your `GOOGLE_APPLICATION_CREDENTIALS` service-account JSON lives outside
+`backend/`, either copy it into `backend/storage/` (already bind-mounted,
+gitignored) and point the env var at e.g.
+`/var/www/html/storage/google-credentials.json`, or add your own volume
+mount for it in `docker-compose.yml`.
+
+Tear down with `docker compose down` (add `-v` to also wipe the MySQL data
+volume and start fresh).
+
 ## Merging your existing two repos into this one, with history intact
 
 Since each side already has its own git history you care about, don't just
@@ -86,6 +124,10 @@ scene) alongside its image prompt.
 4. `POST /api/story-image-prompts/{id}/video` (unchanged) — optional, animates
    an individual scene's still image into a motion clip via `VideoProviderContract`
    (Veo by default, Agnes AI as an opt-in alternative — set `VIDEO_PROVIDER`).
+   `php artisan story:generate-videos` runs the identical pipeline synchronously
+   from the CLI (`--scene=ID` for a specific one, `--limit=N` otherwise) —
+   useful for testing a provider without a queue worker running; logs every
+   step to both console and `storage/logs`.
 5. `POST /api/stories/{id}/video` (new) — assembles the whole story into one
    final video via `StoryVideoAssemblyService`: orders scenes, uses each
    scene's motion clip if step 4 ran for it (otherwise a Ken Burns pan over

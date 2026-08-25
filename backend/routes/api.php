@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CauseController;
 use App\Http\Controllers\Api\CauseMediaController;
 use App\Http\Controllers\Api\CauseMembershipController;
 use App\Http\Controllers\Api\CausePaymentController;
+use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LinkStatsController;
 use App\Http\Controllers\Api\PinterestBoardController;
@@ -76,6 +77,14 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/story-series', [StoryController::class, 'series']);
     Route::post('/stories', [StoryController::class, 'store']);
     Route::get('/stories', [StoryController::class, 'index']);
+    Route::get('/stories/{story:slug}', [StoryController::class, 'show']);
+
+    // Characters — list scoped to a story or series, plus one character's
+    // own generated scenes/videos. See CharacterController for the
+    // story-vs-series routing rule (series-owned characters redirect).
+    Route::get('/stories/{story:slug}/characters', [CharacterController::class, 'forStory']);
+    Route::get('/series/{series:slug}/characters', [CharacterController::class, 'forSeries']);
+    Route::get('/characters/{character}', [CharacterController::class, 'show']);
 
     // Click-through statistics for this user's shared links
     Route::get('/link-stats', [LinkStatsController::class, 'index']);

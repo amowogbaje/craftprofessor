@@ -18,6 +18,13 @@ class DashboardController extends Controller
      * Merges images and videos into one feed and cursor-paginates the merged,
      * sorted result (a DB-level cursor won't work across two tables sorted
      * together, so this uses an opaque offset-style cursor over the merged set).
+     *
+     * Deliberately scoped to `story_image_prompts` (scenes) + `videos` only.
+     * Character/environment/prop reference portraits live on their own
+     * tables (Character.img_url etc.) and must never be unioned in here —
+     * they're reference material for scene generation, not feed content.
+     * See CharacterController for where those actually belong (per-story
+     * or per-series character views).
      */
     public function feed(Request $request): JsonResponse
     {

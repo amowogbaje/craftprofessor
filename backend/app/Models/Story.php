@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Story extends Model
 {
@@ -17,6 +18,7 @@ class Story extends Model
         'series_id',
         'episode_number',
         'title',
+        'slug',
         'source',
         'published_at',
         'story_link',
@@ -41,6 +43,25 @@ class Story extends Model
                 $story->user_id = $story->series?->user_id ?? $story->user_id;
             }
         });
+
+        static::creating(function (Story $story) {
+            if (!$story->slug) {
+                $story->slug = static::uniqueSlugFor($story->title ?: 'story');
+            }
+        });
+    }
+
+    public static function uniqueSlugFor(string $seed): string
+    {
+        $base = Str::slug($seed) ?: 'story';
+        $slug = $base;
+        $i = 1;
+
+        while (static::where('slug', $slug)->exists()) {
+            $slug = "{$base}-" . ++$i;
+        }
+
+        return $slug;
     }
 
     public function user(): BelongsTo

@@ -26,6 +26,12 @@ class VideoGeneratorService
     ) {
     }
 
+    /** Which provider is currently active (e.g. "veo", "agnes") — for logging/CLI output. */
+    public function providerName(): string
+    {
+        return $this->videoProvider->name();
+    }
+
     public function generate(VideoPrompt $videoPrompt, User $user): ?Video
     {
         $imagePrompt = $videoPrompt->imagePrompt;

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -99,7 +100,7 @@ export function StoriesPage() {
             {stories.map((story) => (
               <Card key={story.id}>
                 <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
+                  <Link to={`/stories/${story.slug}`} className="min-w-0 hover:underline">
                     <p className="truncate text-sm">
                       {story.user_supplied_text?.slice(0, 140) ?? story.story_link ?? 'Untitled story'}
                     </p>
@@ -107,7 +108,7 @@ export function StoriesPage() {
                       {story.series ? `Series: ${story.series.title}` : 'Standalone'} ·{' '}
                       {new Date(story.created_at).toLocaleDateString()}
                     </p>
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-2">
                     <Badge variant={story.prompt_generated ? 'success' : 'secondary'}>
                       {story.prompt_generated ? `${story.image_prompts_count ?? 0} SCENES` : 'PROCESSING'}

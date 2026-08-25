@@ -11,6 +11,9 @@ interface TtsProviderContract
      */
     public function speak(string $text): string;
 
+    /** File extension the returned bytes should be saved with (no dot) — e.g. "mp3", "wav". */
+    public function extension(): string;
+
     /** Short identifier for logging/debugging which provider produced a clip. */
     public function name(): string;
 }

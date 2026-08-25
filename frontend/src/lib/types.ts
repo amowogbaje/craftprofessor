@@ -49,6 +49,38 @@ export interface FeedItem {
   sort_at: string
 }
 
+export interface Character {
+  id: number
+  name: string
+  img_url: string | null
+  img_url_quality?: string | null
+  story_id: number | null
+  series_id: number | null
+}
+
+export interface CharactersResponse {
+  scope: 'story' | 'series'
+  redirect_to: string | null
+  title: string
+  data: Character[]
+}
+
+export interface CharacterScene {
+  id: number
+  prompt: string
+  narration: string | null
+  scene_number: number | null
+  image_generated_url: string | null
+  status: ContentStatus
+  story: { id: number; title: string | null; slug: string; series_id: number | null } | null
+  video: { id: number; video_url: string | null; status: string } | null
+}
+
+export interface CharacterDetailResponse {
+  data: Character
+  scenes: CharacterScene[]
+}
+
 export interface StoryVideo {
   id: number
   story_id: number
@@ -61,12 +93,20 @@ export interface StoryVideo {
   generated_at: string | null
 }
 
+export interface StoryDetailResponse {
+  data: Story & { image_prompts: CharacterScene[] }
+  characters: Character[]
+  characters_scope: 'story' | 'series'
+  characters_path: string
+}
+
 export interface Story {
   id: number
   user_id: number
   series_id: number | null
   episode_number: number | null
   title?: string | null
+  slug: string
   story_link: string | null
   story_text: string | null
   user_supplied_text: string | null

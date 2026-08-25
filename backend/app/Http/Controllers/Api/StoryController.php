@@ -52,6 +52,33 @@ class StoryController extends Controller
         return response()->json($stories);
     }
 
+    /**
+     * GET /api/stories/{story:slug}
+     * Story detail: ordered scenes (with per-scene video, if generated),
+     * the assembled full-story video (if any), and the character pool this
+     * story draws on (see Story::knownCharacters() — series-wide for
+     * episodes, story-only for standalone).
+     */
+    public function show(Request $request, Story $story): JsonResponse
+    {
+        $this->authorizeOwner($request, $story->user_id);
+
+        $story->load([
+            'series:id,title,slug',
+            'video',
+            'imagePrompts' => fn ($q) => $q->ordered()->with('video'),
+        ]);
+
+        return response()->json([
+            'data' => $story,
+            'characters' => $story->knownCharacters()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'characters_scope' => $story->isPartOfSeries() ? 'series' : 'story',
+            'characters_path' => $story->isPartOfSeries()
+                ? "/series/{$story->series->slug}/characters"
+                : "/stories/{$story->slug}/characters",
+        ]);
+    }
+
     /** GET /api/story-series (list, distinct from POST which creates) */
     public function series(Request $request): JsonResponse
     {
@@ -61,5 +88,10 @@ class StoryController extends Controller
             ->paginate(20);
 
         return response()->json($series);
+    }
+
+    protected function authorizeOwner(Request $request, ?int $ownerId): void
+    {
+        abort_if($request->user()->id !== $ownerId, 403, 'Not your story.');
     }
 }

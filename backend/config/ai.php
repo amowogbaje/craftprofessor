@@ -254,9 +254,17 @@ return [
     |
     */
 
-    'default_tts_provider' => env('TTS_PROVIDER', 'openai'), // openai | eleven
+    'default_tts_provider' => env('TTS_PROVIDER', 'gemini'), // gemini | openai | eleven
 
     'tts_providers' => [
+        // Free tier, reuses GEMINI_API_KEY above — the default because it
+        // needs no separate account/key to get narration working.
+        'gemini' => [
+            'key' => env('GEMINI_API_KEY'),
+            'base_url' => env('GEMINI_TTS_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+            'model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
+            'voice' => env('GEMINI_TTS_VOICE', 'Kore'), // see ai.google.dev/gemini-api/docs/speech-generation for the full voice list
+        ],
         'openai' => [
             'key' => env('OPENAI_API_KEY'),
             'base_url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
