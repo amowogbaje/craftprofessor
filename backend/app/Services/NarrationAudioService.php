@@ -44,7 +44,8 @@ class NarrationAudioService
         try {
             $bytes = $this->tts->speak($imagePrompt->narration);
 
-            $path = "narration-audio/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . '.mp3';
+            $ext = $this->tts->extension();
+            $path = "narration-audio/{$imagePrompt->story_id}/{$imagePrompt->id}-" . Str::random(8) . ".{$ext}";
             Storage::disk('public')->put($path, $bytes);
 
             $seconds = $this->probeDuration(Storage::disk('public')->path($path));

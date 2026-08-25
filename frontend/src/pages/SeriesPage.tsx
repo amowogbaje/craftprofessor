@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Layers, Sparkles } from 'lucide-react'
+import { Loader2, Layers, Sparkles, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -105,6 +106,13 @@ export function SeriesPage() {
                     {series.source === 'storyverse' ? ' · StoryVerse' : ''}
                   </p>
                 </div>
+                <Link
+                  to={`/series/${series.slug}/characters`}
+                  className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Characters
+                </Link>
               </CardContent>
             </Card>
           ))

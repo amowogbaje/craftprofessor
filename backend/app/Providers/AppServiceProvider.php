@@ -56,11 +56,19 @@ class AppServiceProvider extends ServiceProvider
                     config('ai.tts_providers.eleven.base_url'),
                     config('ai.tts_providers.eleven.model'),
                 ),
-                default => new \App\Ai\Providers\OpenAiTtsProvider(
+                'openai' => new \App\Ai\Providers\OpenAiTtsProvider(
                     config('ai.tts_providers.openai.key'),
                     config('ai.tts_providers.openai.base_url'),
                     config('ai.tts_providers.openai.model'),
                     config('ai.tts_providers.openai.voice'),
+                ),
+                // Default — free tier, reuses GEMINI_API_KEY (already
+                // configured for text/image generation), no new secret needed.
+                default => new \App\Ai\Providers\GeminiTtsProvider(
+                    config('ai.tts_providers.gemini.key'),
+                    config('ai.tts_providers.gemini.base_url'),
+                    config('ai.tts_providers.gemini.model'),
+                    config('ai.tts_providers.gemini.voice'),
                 ),
             };
         });

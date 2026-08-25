@@ -15,8 +15,8 @@ use Laravel\Ai\Exceptions\RateLimitedException;
 class ElevenLabsTtsProvider implements TtsProviderContract
 {
     public function __construct(
-        protected string $apiKey,
-        protected string $voiceId,
+        protected ?string $apiKey,
+        protected ?string $voiceId,
         protected string $baseUrl = 'https://api.elevenlabs.io/v1',
         protected string $model = 'eleven_multilingual_v2',
     ) {}
@@ -26,8 +26,17 @@ class ElevenLabsTtsProvider implements TtsProviderContract
         return 'eleven';
     }
 
+    public function extension(): string
+    {
+        return 'mp3';
+    }
+
     public function speak(string $text): string
     {
+        if (empty($this->apiKey) || empty($this->voiceId)) {
+            throw new \RuntimeException('ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID are not configured.');
+        }
+
         try {
             $response = Http::withHeaders(['xi-api-key' => $this->apiKey])
                 ->timeout(60)

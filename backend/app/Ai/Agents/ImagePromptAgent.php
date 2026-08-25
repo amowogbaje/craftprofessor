@@ -31,8 +31,8 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
      * story's real beats — short stories get fewer scenes, long/eventful
      * ones get more, instead of every story being forced into exactly 10.
      */
-    protected const MIN_SCENES = 4;
-    protected const MAX_SCENES = 20;
+    public const MIN_SCENES = 4;
+    public const MAX_SCENES = 20;
 
     public function __construct(
         protected Story $story,

@@ -9,6 +9,8 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { StoriesPage } from '@/pages/StoriesPage'
+import { StoryDetailPage } from '@/pages/StoryDetailPage'
+import { StoryCharactersPage, SeriesCharactersPage } from '@/pages/CharactersPage'
 import { SeriesPage } from '@/pages/SeriesPage'
 import { StatsPage } from '@/pages/StatsPage'
 import { WalletPage } from '@/pages/WalletPage'
@@ -33,7 +35,10 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/stories" element={<StoriesPage />} />
+          <Route path="/stories/:slug" element={<StoryDetailPage />} />
+          <Route path="/stories/:slug/characters" element={<StoryCharactersPage />} />
           <Route path="/series" element={<SeriesPage />} />
+          <Route path="/series/:slug/characters" element={<SeriesCharactersPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/settings" element={<SettingsPage />} />

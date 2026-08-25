@@ -1,5 +1,16 @@
 import { api } from './http'
-import type { ContentStatus, FeedItem, Paginated, Story, StorySeries, StoryVerseImportResult, StoryVideo } from './types'
+import type {
+  CharacterDetailResponse,
+  CharactersResponse,
+  ContentStatus,
+  FeedItem,
+  Paginated,
+  Story,
+  StoryDetailResponse,
+  StorySeries,
+  StoryVerseImportResult,
+  StoryVideo,
+} from './types'
 
 export async function fetchFeed(type: 'all' | 'image' | 'video', status: 'all' | ContentStatus) {
   const { data } = await api.get<{ data: FeedItem[] }>('/dashboard/feed', { params: { type, status } })
@@ -64,4 +75,24 @@ export async function requestStoryVideo(storyId: number) {
 export async function fetchStoryVideo(storyId: number) {
   const { data } = await api.get<{ data: StoryVideo }>(`/stories/${storyId}/video`)
   return data.data
+}
+
+export async function fetchStoryDetail(storySlug: string) {
+  const { data } = await api.get<StoryDetailResponse>(`/stories/${storySlug}`)
+  return data
+}
+
+export async function fetchStoryCharacters(storySlug: string) {
+  const { data } = await api.get<CharactersResponse>(`/stories/${storySlug}/characters`)
+  return data
+}
+
+export async function fetchSeriesCharacters(seriesSlug: string) {
+  const { data } = await api.get<CharactersResponse>(`/series/${seriesSlug}/characters`)
+  return data
+}
+
+export async function fetchCharacterDetail(characterId: number) {
+  const { data } = await api.get<CharacterDetailResponse>(`/characters/${characterId}`)
+  return data
 }
