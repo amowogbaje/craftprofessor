@@ -58,16 +58,35 @@ class AgnesAiVideoProvider implements VideoProviderContract
                 ],
             ]);
 
+        Log::info('Agnes video submit response', [
+            'status' => $response->status(),
+            'body' => $response->json(),
+            'headers' => $response->headers(),
+        ]);
+
         if ($response->failed()) {
-            Log::error('AgnesAiVideoProvider: submit failed', ['body' => $response->body()]);
-            throw new RuntimeException('Agnes AI video submit failed: ' . $response->body());
+            Log::error('AgnesAiVideoProvider: submit failed', [
+                'body' => $response->body()
+            ]);
+
+            throw new RuntimeException(
+                'Agnes AI video submit failed: ' . $response->body()
+            );
         }
 
-        $id = $response->json('video_id') ?? $response->json('id') ?? $response->json('task_id');
+        $id = $response->json('video_id')
+            ?? $response->json('id')
+            ?? $response->json('task_id');
 
         if (!$id) {
-            throw new RuntimeException('Agnes AI did not return a video/task id: ' . $response->body());
+            throw new RuntimeException(
+                'Agnes AI did not return a video/task id: ' . $response->body()
+            );
         }
+
+        Log::info('Agnes video task ID selected', [
+            'id' => $id,
+        ]);
 
         return $id;
     }
