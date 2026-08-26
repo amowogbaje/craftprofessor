@@ -4,6 +4,7 @@ namespace App\Ai\Providers;
 
 use App\Ai\Contracts\ImageProviderContract;
 use App\Ai\Support\GeneratedImageFile;
+use App\Support\BinaryDownloader;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -88,15 +89,10 @@ class AgnesAiImageProvider implements ImageProviderContract
             }
 
             if (!empty($data['url'])) {
-                // Accept-Encoding: identity — some Agnes CDN responses use
-                // Brotli (Content-Encoding: br), which not every server's
-                // libcurl build can decode (cURL error 61: "Unrecognized
-                // content encoding type"). The image is already
-                // JPEG/PNG-compressed, so there's no downside to skipping
-                // transfer compression here.
-                $bytes = Http::withHeaders(['Accept-Encoding' => 'identity'])
-                    ->timeout(60)->get($data['url'])->throw()->body();
-                return new GeneratedImageFile($bytes);
+                // See App\Support\BinaryDownloader — handles Agnes CDN
+                // responses that ignore Accept-Encoding negotiation and
+                // force Brotli regardless (cURL error 61 otherwise).
+                return new GeneratedImageFile(BinaryDownloader::get($data['url']));
             }
 
             throw new RuntimeException('Agnes AI response had neither b64_json nor url: ' . $response->body());

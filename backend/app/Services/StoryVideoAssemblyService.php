@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Story;
 use App\Models\StoryImagePrompt;
 use App\Models\StoryVideo;
-use Illuminate\Support\Facades\Http;
+use App\Support\BinaryDownloader;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -226,12 +226,11 @@ class StoryVideoAssemblyService
 
     protected function download(string $url, string $destination): string
     {
-        // Accept-Encoding: identity — same cURL-61/Brotli issue as the
-        // Agnes providers; this method downloads whatever URL a scene
-        // points at (image, per-scene video, narration audio), so it's
-        // the single highest-exposure spot for that bug in this app.
-        $bytes = Http::withHeaders(['Accept-Encoding' => 'identity'])
-            ->timeout(60)->get($url)->throw()->body();
+        // See App\Support\BinaryDownloader — this method downloads
+        // whatever URL a scene points at (image, per-scene video,
+        // narration audio), so it's the single highest-exposure spot for
+        // the Agnes CDN cURL-error-61/Brotli issue in this app.
+        $bytes = BinaryDownloader::get($url);
         file_put_contents($destination, $bytes);
 
         return $destination;

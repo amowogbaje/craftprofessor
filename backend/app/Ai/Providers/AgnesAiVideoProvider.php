@@ -3,6 +3,7 @@
 namespace App\Ai\Providers;
 
 use App\Ai\Contracts\VideoProviderContract;
+use App\Support\BinaryDownloader;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -71,11 +72,10 @@ class AgnesAiVideoProvider implements VideoProviderContract
         $taskId = $this->submit($motionPrompt, $sourceImageUrl);
         $videoUrl = $this->poll($taskId);
 
-        // Accept-Encoding: identity — see AgnesAiImageProvider for why:
-        // Agnes' output CDN can send Brotli-encoded responses that not
-        // every server's libcurl build can decode (cURL error 61).
-        return Http::withHeaders(['Accept-Encoding' => 'identity'])
-            ->timeout(60)->get($videoUrl)->throw()->body();
+        // See App\Support\BinaryDownloader — Agnes' output CDN sends
+        // Brotli-encoded responses regardless of Accept-Encoding, which
+        // plain Http::get() can't handle (cURL error 61).
+        return BinaryDownloader::get($videoUrl);
     }
 
     protected function submit(string $motionPrompt, string $sourceImageUrl): string

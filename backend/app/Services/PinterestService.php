@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\SocialAccount;
 use App\Models\StoryImagePrompt;
+use App\Support\BinaryDownloader;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -591,10 +592,10 @@ class PinterestService
             throw new RuntimeException('Pinterest did not return a media_id/upload_url.');
         }
 
-        // Accept-Encoding: identity — avoids cURL error 61 if $videoUrl's
-        // host serves Brotli-encoded responses this server's libcurl
-        // build can't decode (seen with Agnes-hosted video URLs).
-        $videoBytes = Http::withHeaders(['Accept-Encoding' => 'identity'])->timeout(60)->get($videoUrl)->body();
+        // See App\Support\BinaryDownloader — guards against cURL error 61
+        // if $videoUrl's host sends a Content-Encoding curl can't
+        // auto-decode (seen with Agnes-hosted video URLs).
+        $videoBytes = BinaryDownloader::get($videoUrl);
 
         $request = Http::timeout(120);
         foreach ($uploadParameters as $key => $value) {

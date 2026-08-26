@@ -4,6 +4,7 @@ namespace App\Ai\Providers;
 
 use App\Ai\Contracts\VideoProviderContract;
 use App\Services\GoogleServiceAccountAuth;
+use App\Support\BinaryDownloader;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -43,12 +44,10 @@ class VeoVideoProvider implements VideoProviderContract
         $config = config('ai.providers.veo');
         $token = $this->auth->getAccessToken();
 
-        // Accept-Encoding: identity — avoids cURL error 61 if the image's
-        // host (e.g. Agnes, if that's the active image provider) serves
-        // Brotli-encoded responses this server's libcurl can't decode.
-        $imageBytes = base64_encode(
-            Http::withHeaders(['Accept-Encoding' => 'identity'])->timeout(30)->get($sourceImageUrl)->body()
-        );
+        // See App\Support\BinaryDownloader — guards against cURL error 61
+        // if the image host (e.g. Agnes, if that's the active image
+        // provider) sends a Content-Encoding curl can't auto-decode.
+        $imageBytes = base64_encode(BinaryDownloader::get($sourceImageUrl, 30));
 
         $response = Http::withToken($token)
             ->timeout(60)
