@@ -591,7 +591,10 @@ class PinterestService
             throw new RuntimeException('Pinterest did not return a media_id/upload_url.');
         }
 
-        $videoBytes = Http::timeout(60)->get($videoUrl)->body();
+        // Accept-Encoding: identity — avoids cURL error 61 if $videoUrl's
+        // host serves Brotli-encoded responses this server's libcurl
+        // build can't decode (seen with Agnes-hosted video URLs).
+        $videoBytes = Http::withHeaders(['Accept-Encoding' => 'identity'])->timeout(60)->get($videoUrl)->body();
 
         $request = Http::timeout(120);
         foreach ($uploadParameters as $key => $value) {

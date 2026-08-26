@@ -226,7 +226,12 @@ class StoryVideoAssemblyService
 
     protected function download(string $url, string $destination): string
     {
-        $bytes = Http::timeout(60)->get($url)->throw()->body();
+        // Accept-Encoding: identity — same cURL-61/Brotli issue as the
+        // Agnes providers; this method downloads whatever URL a scene
+        // points at (image, per-scene video, narration audio), so it's
+        // the single highest-exposure spot for that bug in this app.
+        $bytes = Http::withHeaders(['Accept-Encoding' => 'identity'])
+            ->timeout(60)->get($url)->throw()->body();
         file_put_contents($destination, $bytes);
 
         return $destination;

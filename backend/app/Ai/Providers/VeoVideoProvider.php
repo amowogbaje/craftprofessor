@@ -43,7 +43,12 @@ class VeoVideoProvider implements VideoProviderContract
         $config = config('ai.providers.veo');
         $token = $this->auth->getAccessToken();
 
-        $imageBytes = base64_encode(Http::timeout(30)->get($sourceImageUrl)->body());
+        // Accept-Encoding: identity — avoids cURL error 61 if the image's
+        // host (e.g. Agnes, if that's the active image provider) serves
+        // Brotli-encoded responses this server's libcurl can't decode.
+        $imageBytes = base64_encode(
+            Http::withHeaders(['Accept-Encoding' => 'identity'])->timeout(30)->get($sourceImageUrl)->body()
+        );
 
         $response = Http::withToken($token)
             ->timeout(60)

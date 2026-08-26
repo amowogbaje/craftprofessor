@@ -88,7 +88,14 @@ class AgnesAiImageProvider implements ImageProviderContract
             }
 
             if (!empty($data['url'])) {
-                $bytes = Http::timeout(60)->get($data['url'])->throw()->body();
+                // Accept-Encoding: identity — some Agnes CDN responses use
+                // Brotli (Content-Encoding: br), which not every server's
+                // libcurl build can decode (cURL error 61: "Unrecognized
+                // content encoding type"). The image is already
+                // JPEG/PNG-compressed, so there's no downside to skipping
+                // transfer compression here.
+                $bytes = Http::withHeaders(['Accept-Encoding' => 'identity'])
+                    ->timeout(60)->get($data['url'])->throw()->body();
                 return new GeneratedImageFile($bytes);
             }
 

@@ -71,7 +71,11 @@ class AgnesAiVideoProvider implements VideoProviderContract
         $taskId = $this->submit($motionPrompt, $sourceImageUrl);
         $videoUrl = $this->poll($taskId);
 
-        return Http::timeout(60)->get($videoUrl)->throw()->body();
+        // Accept-Encoding: identity — see AgnesAiImageProvider for why:
+        // Agnes' output CDN can send Brotli-encoded responses that not
+        // every server's libcurl build can decode (cURL error 61).
+        return Http::withHeaders(['Accept-Encoding' => 'identity'])
+            ->timeout(60)->get($videoUrl)->throw()->body();
     }
 
     protected function submit(string $motionPrompt, string $sourceImageUrl): string
