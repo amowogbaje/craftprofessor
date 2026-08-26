@@ -43,6 +43,10 @@ class AppServiceProvider extends ServiceProvider
                     config('ai.video_providers.agnes.key'),
                     config('ai.video_providers.agnes.base_url'),
                     config('ai.video_providers.agnes.model'),
+                    config('ai.video_providers.agnes.width'),
+                    config('ai.video_providers.agnes.height'),
+                    config('ai.video_providers.agnes.num_frames'),
+                    config('ai.video_providers.agnes.frame_rate'),
                 ),
                 default => $app->make(\App\Ai\Providers\VeoVideoProvider::class),
             };

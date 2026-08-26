@@ -240,6 +240,13 @@ return [
             'key' => env('AGNES_API_KEY'),
             'base_url' => env('AGNES_BASE_URL', 'https://apihub.agnes-ai.com/v1'),
             'model' => env('AGNES_VIDEO_MODEL', 'agnes-video-v2.0'),
+            // Portrait by default (matches StoryVideoAssemblyService's
+            // 1080x1920 target) — Agnes' own default is landscape 768x1152.
+            'width' => (int) env('AGNES_VIDEO_WIDTH', 768),
+            'height' => (int) env('AGNES_VIDEO_HEIGHT', 1152),
+            // Must satisfy 8n+1 and be <= 441. 121 @ 24fps ≈ 5s/scene.
+            'num_frames' => (int) env('AGNES_VIDEO_NUM_FRAMES', 121),
+            'frame_rate' => (int) env('AGNES_VIDEO_FRAME_RATE', 24),
         ],
     ],
 
