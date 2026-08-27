@@ -120,7 +120,7 @@ class DashboardController extends Controller
         } elseif ($type === 'video') {
             $query = $videos;
         } else {
-            $query = $images->unionAll($videos);
+            $query = $images;
         }
 
         /*
