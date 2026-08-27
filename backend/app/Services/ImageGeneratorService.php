@@ -403,15 +403,45 @@ class ImageGeneratorService
      *   the character/location fresh every single time.
      *
      * @return array{0: string, 1: string[]} [$prompt, $referenceImageUrls]
+     *
+     * A bare array of reference image URLs with no indication of what each
+     * one represents gives the model no reason to treat this as true
+     * multi-reference composition rather than "edit this one photo" — in
+     * practice this meant Agnes would lightly modify the character image
+     * and largely ignore the environment/prop references. Labeling each
+     * image's role and name, in the same order they're attached, fixes that.
      */
     protected function buildScenePromptAndReferences(StoryImagePrompt $imagePrompt): array
     {
         $assets = $imagePrompt->allReferenceAssets();
 
         if ($this->imageProvider->supportsReferenceImages()) {
-            $referenceImageUrls = $assets->pluck('img_url')->filter()->values()->all();
+            $withImages = $assets->filter(fn ($asset) => filled($asset->img_url))->values();
+            $referenceImageUrls = $withImages->pluck('img_url')->all();
 
-            return [$imagePrompt->prompt, $referenceImageUrls];
+            if ($referenceImageUrls === []) {
+                return [$imagePrompt->prompt, []];
+            }
+
+            $labels = $withImages->map(function ($asset, $i) {
+                $kind = match (get_class($asset)) {
+                    \App\Models\Character::class => 'Character',
+                    \App\Models\Environment::class => 'Environment/setting',
+                    \App\Models\Prop::class => 'Prop/object',
+                    default => 'Reference',
+                };
+
+                return ($i + 1) . ". {$kind} — \"{$asset->name}\": keep this exact appearance.";
+            })->implode("\n");
+
+            $prompt = "{$imagePrompt->prompt}\n\n"
+                . "Reference images are attached below, in this order:\n{$labels}\n\n"
+                . 'Compose all of the above into one coherent scene — this is multi-reference '
+                . 'composition, not a single-image edit. Use the character reference(s) for '
+                . 'likeness, the environment reference for the setting/background, and any prop '
+                . 'reference(s) for the object(s) described, all rendered together in the scene above.';
+
+            return [$prompt, $referenceImageUrls];
         }
 
         $definitions = $assets

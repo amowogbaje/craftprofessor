@@ -34,7 +34,8 @@ class GenerateStoryVideos extends Command
     protected $signature = 'story:generate-videos
         {--scene= : Story image prompt (scene) id to force — skips the queue-picking logic entirely}
         {--user= : Only consider scenes belonging to this user id}
-        {--limit=1 : Max scenes to process this run (ignored if --scene is given)}';
+        {--limit=1 : Max scenes to process this run (ignored if --scene is given)}
+        {--force : With --scene, clear any existing video attempt first and regenerate (same as the API\'s regenerate endpoint)}';
 
     protected $description = 'Generate video(s) for scene(s) synchronously, with verbose logging — for testing VIDEO_PROVIDER (Veo/Agnes) from the CLI.';
 
@@ -55,6 +56,13 @@ class GenerateStoryVideos extends Command
             if (!$scene) {
                 $this->error("No story_image_prompt with id {$sceneOption}.");
                 return self::FAILURE;
+            }
+
+            if ($this->option('force') && $scene->videoPrompt) {
+                $this->line("Clearing previous video attempt for scene #{$scene->id}...");
+                \App\Models\Video::where('video_prompt_id', $scene->videoPrompt->id)->delete();
+                $scene->videoPrompt->delete();
+                $scene->refresh();
             }
 
             $this->processScene($scene, $promptService, $videoService, $limits);

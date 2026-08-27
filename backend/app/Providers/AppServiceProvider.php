@@ -30,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
                     config('ai.image_providers.agnes.key'),
                     config('ai.image_providers.agnes.base_url'),
                     config('ai.image_providers.agnes.model'),
+                    config('ai.image_providers.agnes.composition_model'),
                 ),
                 default => $app->make(\App\Ai\Agents\ImageGeneratorAgent::class),
             };

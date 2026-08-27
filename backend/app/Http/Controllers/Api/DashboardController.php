@@ -49,10 +49,10 @@ class DashboardController extends Controller
                 id,
                 'image' as type,
                 image_generated_url as url,
-                pinterest_pin_id,
                 prompt,
                 narration,
                 scene_number,
+                pinterest_pin_id,
                 status,
                 scheduled_at,
                 published_at,
@@ -92,18 +92,18 @@ class DashboardController extends Controller
                 NULL as prompt,
                 sip.narration as narration,
                 sip.scene_number as scene_number,
+                NULL as pinterest_pin_id,
                 videos.status,
                 videos.scheduled_at,
                 videos.published_at,
                 NULL as story_id,
-                NULL as pinterest_pin_id,
                 videos.story_image_prompt_id as source_image_prompt_id,
                 NULL as has_video,
                 COALESCE(videos.generated_at, videos.created_at) as sort_at
             ")
             ->leftJoin('story_image_prompts as sip', 'sip.id', '=', 'videos.story_image_prompt_id')
             ->where('videos.user_id', $user->id)
-            ->whereNotNull('video_url');
+            ->whereNotNull('videos.video_url');
 
         if ($status !== 'all') {
             $videos->where('videos.status', $status);
@@ -120,7 +120,7 @@ class DashboardController extends Controller
         } elseif ($type === 'video') {
             $query = $videos;
         } else {
-            $query = $images;
+            $query = $images->unionAll($videos);
         }
 
         /*
@@ -161,6 +161,20 @@ class DashboardController extends Controller
             $rows = $rows->take($perPage);
             $nextCursor = (string) ($offset + $perPage);
         }
+
+        // Raw selectRaw()/UNION rows come back typed however the DB driver
+        // feels like (MySQL's EXISTS(...) often arrives as "1"/"0" strings
+        // via PDO, not a real JSON boolean) — cast explicitly rather than
+        // relying on the frontend's truthy checks to paper over it forever.
+        $rows = $rows->values()->map(function ($row) {
+            $row->has_video = is_null($row->has_video) ? null : (bool) $row->has_video;
+            $row->scene_number = is_null($row->scene_number) ? null : (int) $row->scene_number;
+            $row->id = (int) $row->id;
+            $row->story_id = is_null($row->story_id) ? null : (int) $row->story_id;
+            $row->source_image_prompt_id = is_null($row->source_image_prompt_id) ? null : (int) $row->source_image_prompt_id;
+
+            return $row;
+        });
 
         return response()->json([
             'data' => $rows,
@@ -212,8 +226,10 @@ class DashboardController extends Controller
         return [
             'type' => 'image', 'id' => $p->id, 'url' => $p->image_generated_url, 'prompt' => $p->prompt,
             'narration' => $p->narration, 'scene_number' => $p->scene_number,
+            'pinterest_pin_id' => $p->pinterest_pin_id,
             'status' => $p->status, 'scheduled_at' => $p->scheduled_at, 'published_at' => $p->published_at,
-            'story_id' => $p->story_id, 'has_video' => $p->videoPrompt()->exists(),
+            'story_id' => $p->story_id, 'source_image_prompt_id' => null,
+            'has_video' => $p->videoPrompt()->exists(),
             'sort_at' => $p->generated_at ?? $p->created_at,
         ];
     }
@@ -221,10 +237,12 @@ class DashboardController extends Controller
     protected function presentVideo(Video $v): array
     {
         return [
-            'type' => 'video', 'id' => $v->id, 'url' => $v->video_url,
+            'type' => 'video', 'id' => $v->id, 'url' => $v->video_url, 'prompt' => null,
             'narration' => $v->imagePrompt?->narration, 'scene_number' => $v->imagePrompt?->scene_number,
-            'source_image_prompt_id' => $v->story_image_prompt_id, 'status' => $v->status,
-            'scheduled_at' => $v->scheduled_at, 'published_at' => $v->published_at,
+            'pinterest_pin_id' => null,
+            'status' => $v->status, 'scheduled_at' => $v->scheduled_at, 'published_at' => $v->published_at,
+            'story_id' => null, 'source_image_prompt_id' => $v->story_image_prompt_id,
+            'has_video' => null,
             'sort_at' => $v->generated_at ?? $v->created_at,
         ];
     }

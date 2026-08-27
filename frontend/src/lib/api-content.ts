@@ -39,6 +39,11 @@ export async function requestVideo(imagePromptId: number) {
   return data
 }
 
+export async function regenerateVideo(imagePromptId: number) {
+  const { data } = await api.post<{ message: string }>(`/story-image-prompts/${imagePromptId}/video/regenerate`)
+  return data
+}
+
 export async function fetchStories(page = 1) {
   const { data } = await api.get<Paginated<Story>>('/stories', { params: { page } })
   return data

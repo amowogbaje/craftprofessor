@@ -96,6 +96,8 @@ export interface StoryVideo {
 export interface StoryDetailResponse {
   data: Story & { image_prompts: CharacterScene[] }
   characters: Character[]
+  environments: Character[]
+  props: Character[]
   characters_scope: 'story' | 'series'
   characters_path: string
 }

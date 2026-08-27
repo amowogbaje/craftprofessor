@@ -19,20 +19,30 @@ use RuntimeException;
  * appears in, for free, instead of folding a text description into the
  * prompt and hoping.
  *
- * NOTE ON VERIFICATION: this is built from Agnes AI's own published docs
- * (https://agnes-ai.com/doc/agnes-image-12 and the "Image 2.0" reference),
- * but I was not able to exercise it against a live account. Endpoint path,
- * field names (`extra_body.image` vs a top-level `image`), and the response
- * shape should be double-checked against your actual Agnes dashboard docs
- * once you have a key — everything provider-specific is config-driven
- * below so a mismatch is a one-file fix, not a rewrite.
+ * MODEL CHOICE MATTERS HERE: Agnes documents `agnes-image-2.1-flash` as
+ * their pure text-to-image model, and `agnes-image-2.0-flash` as the one
+ * that actually does image-to-image editing / multi-image composition.
+ * Using 2.1-flash for a reference-image request was the root cause of
+ * scenes looking like "just a lightly edited character photo" instead of
+ * a real composed scene — the model wasn't built for compositing multiple
+ * reference images in the first place, regardless of what we sent it.
+ * `run()` below picks the composition model automatically whenever
+ * reference images are present, and only uses the text-to-image model for
+ * a bare-prompt portrait with nothing to reference yet.
+ *
+ * `extra_body.image` (an array) is the correct, doc-confirmed field for
+ * reference images — verified against multiple independent Agnes doc
+ * pages, including an FAQ addressing this exact question. This differs
+ * from the video endpoint, where `image` is a top-level field — the two
+ * endpoints are inconsistent with each other, not a mistake here.
  */
 class AgnesAiImageProvider implements ImageProviderContract
 {
     public function __construct(
-        protected string $apiKey,
+        protected ?string $apiKey,
         protected string $baseUrl = 'https://apihub.agnes-ai.com/v1',
         protected string $model = 'agnes-image-2.1-flash',
+        protected string $compositionModel = 'agnes-image-2.0-flash',
     ) {}
 
     public function generatePortrait(?string $prompt)
@@ -52,21 +62,27 @@ class AgnesAiImageProvider implements ImageProviderContract
 
     protected function run(string $prompt, array $referenceImageUrls = [])
     {
+        if (empty($this->apiKey)) {
+            throw new RuntimeException('AGNES_API_KEY is not configured.');
+        }
+
         try {
             $payload = [
-                'model' => $this->model,
+                // Composition model whenever there's anything to compose
+                // from — see class doc-comment for why this isn't just a
+                // cosmetic choice.
+                'model' => empty($referenceImageUrls) ? $this->model : $this->compositionModel,
                 'prompt' => $prompt,
             ];
 
-            // Agnes' img2img / composition path: pass known reference
-            // images (character portraits, environment/prop references)
-            // straight through as pixels instead of describing them in
-            // text. Docs reference this as extra_body.image — an array,
-            // so multiple references (character + environment + prop) can
-            // all be handed over for one scene at once.
             if (!empty($referenceImageUrls)) {
                 $payload['extra_body'] = [
                     'image' => array_values($referenceImageUrls),
+                    // Explicit rather than relying on Agnes' default —
+                    // this class expects url or b64_json either way, but
+                    // pinning this avoids a silent format change breaking
+                    // that assumption later.
+                    'response_format' => 'url',
                 ];
             }
 

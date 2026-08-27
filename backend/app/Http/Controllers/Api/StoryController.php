@@ -55,9 +55,9 @@ class StoryController extends Controller
     /**
      * GET /api/stories/{story:slug}
      * Story detail: ordered scenes (with per-scene video, if generated),
-     * the assembled full-story video (if any), and the character pool this
-     * story draws on (see Story::knownCharacters() — series-wide for
-     * episodes, story-only for standalone).
+     * the assembled full-story video (if any), and the character/
+     * environment/prop pool this story draws on (see Story::knownCharacters()
+     * et al — series-wide for episodes, story-only for standalone).
      */
     public function show(Request $request, Story $story): JsonResponse
     {
@@ -72,6 +72,8 @@ class StoryController extends Controller
         return response()->json([
             'data' => $story,
             'characters' => $story->knownCharacters()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'environments' => $story->knownEnvironments()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'props' => $story->knownProps()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
             'characters_scope' => $story->isPartOfSeries() ? 'series' : 'story',
             'characters_path' => $story->isPartOfSeries()
                 ? "/series/{$story->series->slug}/characters"

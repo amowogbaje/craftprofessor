@@ -218,6 +218,11 @@ return [
             'key' => env('AGNES_API_KEY'),
             'base_url' => env('AGNES_BASE_URL', 'https://apihub.agnes-ai.com/v1'),
             'model' => env('AGNES_IMAGE_MODEL', 'agnes-image-2.1-flash'),
+            // Used instead of `model` whenever reference images (character/
+            // environment/prop) are attached — Agnes documents this as
+            // their image-to-image/multi-image-composition model, vs
+            // agnes-image-2.1-flash which is text-to-image only.
+            'composition_model' => env('AGNES_IMAGE_COMPOSITION_MODEL', 'agnes-image-2.0-flash'),
         ],
     ],
 

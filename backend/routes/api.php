@@ -97,6 +97,7 @@ Route::middleware('auth:api')->group(function () {
 
     // Video generation (image -> video)
     Route::post('/story-image-prompts/{imagePrompt}/video', [VideoController::class, 'store']);
+    Route::post('/story-image-prompts/{imagePrompt}/video/regenerate', [VideoController::class, 'regenerate']);
 
     // Full story video assembly (scenes + narration audio -> one video)
     Route::post('/stories/{story}/video', [StoryVideoController::class, 'store']);
