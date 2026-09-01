@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Layers, Sparkles, Users } from 'lucide-react'
+import { Loader2, Layers, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,33 +88,28 @@ export function SeriesPage() {
           <p className="text-sm text-muted-foreground">No series yet.</p>
         ) : (
           data?.data.map((series) => (
-            <Card key={series.id}>
-              <CardContent className="flex items-center gap-3 py-4">
-                {series.cover_image_url ? (
-                  <img
-                    src={series.cover_image_url}
-                    alt=""
-                    className="h-10 w-10 shrink-0 rounded-md object-cover"
-                  />
-                ) : (
-                  <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{series.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {series.stories_count ?? 0} episode{series.stories_count === 1 ? '' : 's'}
-                    {series.source === 'storyverse' ? ' · StoryVerse' : ''}
-                  </p>
-                </div>
-                <Link
-                  to={`/series/${series.slug}/characters`}
-                  className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Characters
-                </Link>
-              </CardContent>
-            </Card>
+            <Link key={series.id} to={`/series/${series.slug}`}>
+              <Card className="transition hover:border-primary">
+                <CardContent className="flex items-center gap-3 py-4">
+                  {series.cover_image_url ? (
+                    <img
+                      src={series.cover_image_url}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-md object-cover"
+                    />
+                  ) : (
+                    <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{series.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {series.stories_count ?? 0} episode{series.stories_count === 1 ? '' : 's'}
+                      {series.source === 'storyverse' ? ' · StoryVerse' : ''}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))
         )}
       </div>

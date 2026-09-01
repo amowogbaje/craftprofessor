@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Clapperboard, Loader2, RotateCcw, ExternalLink } from 'lucide-react'
+import { Clapperboard, Loader2, RotateCcw, ExternalLink, Send, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { fetchStoryVideo, requestStoryVideo } from '@/lib/api-content'
+import { fetchStoryVideo, publishStoryVideoToPinterest, requestStoryVideo } from '@/lib/api-content'
 import { apiErrorMessage } from '@/lib/http'
 import { useToast } from '@/components/ui/use-toast'
 import type { Story } from '@/lib/types'
@@ -39,6 +39,15 @@ export function StoryVideoAction({ story }: { story: Story }) {
       toast({ title: 'Video queued', description: 'Stitching scenes together — this can take a few minutes.' })
     },
     onError: (err) => toast({ title: 'Could not start video', description: apiErrorMessage(err), variant: 'destructive' }),
+  })
+
+  const publishMutation = useMutation({
+    mutationFn: () => publishStoryVideoToPinterest(story.id),
+    onSuccess: ({ data }) => {
+      queryClient.setQueryData(['story-video', story.id], data)
+      toast({ title: 'Posted to Pinterest', description: 'The narrated video with captions is live.' })
+    },
+    onError: (err) => toast({ title: 'Could not publish', description: apiErrorMessage(err), variant: 'destructive' }),
   })
 
   if (!story.prompt_generated || (story.image_prompts_count ?? 0) === 0) {
@@ -98,6 +107,24 @@ export function StoryVideoAction({ story }: { story: Story }) {
         <ExternalLink className="h-3 w-3" />
         Watch
       </a>
+      {video.posted_to_pinterest ? (
+        <Badge variant="secondary" className="gap-1" title={video.pinterest_pin_id ?? undefined}>
+          <CheckCircle2 className="h-3 w-3" />
+          On Pinterest
+        </Badge>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={publishMutation.isPending}
+          onClick={() => publishMutation.mutate()}
+          className="gap-1.5"
+          title="Posts this narrated + captioned video — never a raw scene clip — as a Pinterest video pin"
+        >
+          {publishMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          Publish to Pinterest
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"

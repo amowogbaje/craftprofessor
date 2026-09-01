@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\StorySeriesController;
 use App\Http\Controllers\Api\StoryVerseImportController;
 use App\Http\Controllers\Api\StoryVideoController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\SocialAccountController;
@@ -75,6 +76,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/story-series', [StorySeriesController::class, 'store']);
     Route::post('/story-series/import-storyverse', [StoryVerseImportController::class, 'store']);
     Route::get('/story-series', [StoryController::class, 'series']);
+    Route::get('/series/{series:slug}', [StorySeriesController::class, 'show']);
     Route::post('/stories', [StoryController::class, 'store']);
     Route::get('/stories', [StoryController::class, 'index']);
     Route::get('/stories/{story:slug}', [StoryController::class, 'show']);
@@ -91,6 +93,10 @@ Route::middleware('auth:api')->group(function () {
 
     // Dashboard feed
     Route::get('/dashboard/feed', [DashboardController::class, 'feed']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::patch('/dashboard/images/{imagePrompt}', [DashboardController::class, 'updateImage']);
     Route::patch('/dashboard/videos/{video}', [DashboardController::class, 'updateVideo']);
     Route::delete('/dashboard/media', [DashboardController::class, 'deleteMedia']);
@@ -102,6 +108,7 @@ Route::middleware('auth:api')->group(function () {
     // Full story video assembly (scenes + narration audio -> one video)
     Route::post('/stories/{story}/video', [StoryVideoController::class, 'store']);
     Route::get('/stories/{story}/video', [StoryVideoController::class, 'show']);
+    Route::post('/stories/{story}/video/publish-pinterest', [StoryVideoController::class, 'publishToPinterest']);
 
     // Publish limits
     Route::get('/publish-settings', [PublishSettingController::class, 'show']);

@@ -3,22 +3,24 @@
 namespace App\Console\Commands;
 
 use App\Exceptions\InsufficientCoinsException;
+use App\Exceptions\UserGenerationLimitReached;
 use App\Models\StoryImagePrompt;
-use App\Services\UsageLimitService;
+use App\Models\Video;
+use App\Services\SceneVideoGenerationService;
 use App\Services\VideoGeneratorService;
-use App\Services\VideoPromptService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Manual/CLI counterpart to POST /api/story-image-prompts/{id}/video +
- * GenerateVideoJob — runs the exact same two-step pipeline (VideoPromptService
- * writes the motion prompt, VideoGeneratorService calls the configured
- * VIDEO_PROVIDER) but synchronously in the current process, so you can watch
- * it happen and see the real exception instead of digging through a queue
- * worker's log after the fact. Built for testing a provider (e.g. Agnes AI)
- * end-to-end from the CLI without needing `queue:work` running.
+ * Manual/CLI counterpart to POST /api/story-image-prompts/{id}/video —
+ * calls the exact same SceneVideoGenerationService the sync-HTTP and
+ * queued-Job paths use (see VideoController / GenerateVideoJob), just
+ * synchronously in the current process with verbose console output, so
+ * you can watch it happen and see the real exception instead of digging
+ * through a queue worker's log after the fact. Built for testing a
+ * provider (e.g. Agnes AI) end-to-end from the CLI without needing
+ * `queue:work` running.
  *
  * Every meaningful step is logged at INFO, every failure at ERROR, both to
  * the console and storage/logs — same channel VideoPromptService/
@@ -27,7 +29,9 @@ use Illuminate\Support\Facades\Log;
  * (e.g. "AgnesAiVideoProvider: submit failed").
  *
  * Not on the scheduler — this is a manual/testing tool, not part of the
- * automated pipeline (that's still request -> GenerateVideoJob -> queue).
+ * automated pipeline (that's config('ai.video_generation_mode'): request
+ * -> either GenerateVideoJob+queue, or straight into
+ * SceneVideoGenerationService synchronously — see VideoController).
  */
 class GenerateStoryVideos extends Command
 {
@@ -42,11 +46,12 @@ class GenerateStoryVideos extends Command
     /** User ids that hit a limit/coins wall this run — skip their rows for the rest of the run, same fairness rule as story:generate-images. */
     protected Collection $blockedUserIds;
 
-    public function handle(VideoPromptService $promptService, VideoGeneratorService $videoService, UsageLimitService $limits): int
+    public function handle(SceneVideoGenerationService $generator, VideoGeneratorService $videoService): int
     {
         $this->blockedUserIds = collect();
         $provider = config('ai.default_video_provider') ?: 'veo';
-        $this->info("VIDEO_PROVIDER = {$provider}");
+        $mode = config('ai.video_generation_mode');
+        $this->info("VIDEO_PROVIDER = {$provider} (this command always runs synchronously regardless of VIDEO_GENERATION_MODE={$mode})");
 
         $sceneOption = $this->option('scene');
 
@@ -60,12 +65,12 @@ class GenerateStoryVideos extends Command
 
             if ($this->option('force') && $scene->videoPrompt) {
                 $this->line("Clearing previous video attempt for scene #{$scene->id}...");
-                \App\Models\Video::where('video_prompt_id', $scene->videoPrompt->id)->delete();
+                Video::where('video_prompt_id', $scene->videoPrompt->id)->delete();
                 $scene->videoPrompt->delete();
                 $scene->refresh();
             }
 
-            $this->processScene($scene, $promptService, $videoService, $limits);
+            $this->processScene($scene, $generator, $videoService);
             return self::SUCCESS;
         }
 
@@ -80,7 +85,7 @@ class GenerateStoryVideos extends Command
                 break;
             }
 
-            $this->processScene($scene, $promptService, $videoService, $limits);
+            $this->processScene($scene, $generator, $videoService);
             $processed++;
         }
 
@@ -110,9 +115,8 @@ class GenerateStoryVideos extends Command
     /** @return bool true if a video was actually generated, false if skipped/blocked/failed */
     protected function processScene(
         StoryImagePrompt $scene,
-        VideoPromptService $promptService,
+        SceneVideoGenerationService $generator,
         VideoGeneratorService $videoService,
-        UsageLimitService $limits,
     ): bool {
         $user = $scene->user;
 
@@ -135,45 +139,25 @@ class GenerateStoryVideos extends Command
             return false;
         }
 
-        if (!$limits->canGenerateVideo($user)) {
-            $this->warn("  User #{$user->id} hit their daily/monthly video limit.");
-            Log::info('story:generate-videos: daily/monthly limit reached', ['user_id' => $user->id]);
-            $this->blockedUserIds->push($user->id);
-            return false;
-        }
-
-        $required = (int) config('coins.costs.video_prompt') + (int) config('coins.costs.video_generation');
-
-        if ($user->wallet->balance < $required) {
-            $this->warn("  User #{$user->id} has insufficient coins (needs {$required}, has {$user->wallet->balance}).");
-            Log::info('story:generate-videos: insufficient coins', ['user_id' => $user->id, 'required' => $required, 'available' => $user->wallet->balance]);
-            $this->blockedUserIds->push($user->id);
-            return false;
-        }
+        $this->line("  Generating via SceneVideoGenerationService (provider: {$videoService->providerName()})...");
 
         try {
-            $this->line('  Writing motion prompt (VideoPromptService)...');
-            $videoPrompt = $promptService->generate($scene, $user);
-            $this->info("  Motion prompt: \"{$videoPrompt->prompt}\"");
+            $video = $generator->generate($scene, $user);
 
-            $this->line("  Calling video provider ({$videoService->providerName()})...");
-            $video = $videoService->generate($videoPrompt, $user);
-
-            if ($video && $video->video_url) {
-                $this->info("  Done — video #{$video->id}: {$video->video_url}");
-                Log::info('story:generate-videos: succeeded', [
-                    'story_image_prompt_id' => $scene->id,
-                    'video_id' => $video->id,
-                    'video_url' => $video->video_url,
-                    'provider' => $video->provider,
-                ]);
-                return true;
-            }
-
-            $this->error('  Video provider returned no video (see log for details).');
-            return false;
+            $this->info("  Done — video #{$video->id}: {$video->video_url}");
+            Log::info('story:generate-videos: succeeded', [
+                'story_image_prompt_id' => $scene->id,
+                'video_id' => $video->id,
+                'video_url' => $video->video_url,
+                'provider' => $video->provider,
+            ]);
+            return true;
         } catch (InsufficientCoinsException $e) {
             $this->warn("  {$e->getMessage()}");
+            $this->blockedUserIds->push($user->id);
+            return false;
+        } catch (UserGenerationLimitReached $e) {
+            $this->warn("  User #{$user->id} hit their daily/monthly video limit.");
             $this->blockedUserIds->push($user->id);
             return false;
         } catch (\Throwable $e) {

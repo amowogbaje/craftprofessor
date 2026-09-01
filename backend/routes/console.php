@@ -56,6 +56,25 @@ Schedule::command('story:post-pinterest-pin')
     ->timezone('UTC')
     ->withoutOverlapping();
 
+// Scheduler 3c: assembled story videos (the narrated + captioned "mixed
+// copy") — separate cadence/cap from per-scene pins above, since these are
+// far less frequent (one per finished story, not one per scene). Runs less
+// often; there's no need to check every 5 minutes for something this rare.
+// Same overnight-window split as Scheduler 3b above (two registrations
+// rather than one between() spanning midnight, matching that established
+// pattern in this file).
+Schedule::command('story:post-pinterest-story-video')
+    ->everyThirtyMinutes()
+    ->between('23:00', '23:59')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
+Schedule::command('story:post-pinterest-story-video')
+    ->everyThirtyMinutes()
+    ->between('00:00', '03:00')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
 // Scheduler 4: flip scheduled dashboard content to published, every 10 minutes
 Schedule::command('content:publish-due')
     ->everyTenMinutes()

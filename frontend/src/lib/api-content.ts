@@ -5,6 +5,7 @@ import type {
   ContentStatus,
   FeedItem,
   Paginated,
+  SeriesDetailResponse,
   Story,
   StoryDetailResponse,
   StorySeries,
@@ -35,12 +36,19 @@ export async function deleteFeedItem(item: Pick<FeedItem, 'type' | 'id'>) {
 }
 
 export async function requestVideo(imagePromptId: number) {
-  const { data } = await api.post<{ message: string }>(`/story-image-prompts/${imagePromptId}/video`)
+  // 'sync' mode returns 201 with the finished video already in `data`;
+  // 'queue' mode returns 202 with just a queued message — same call site
+  // either way, see config('ai.video_generation_mode') on the backend.
+  const { data } = await api.post<{ message: string; data?: { id: number; video_url: string } }>(
+    `/story-image-prompts/${imagePromptId}/video`
+  )
   return data
 }
 
 export async function regenerateVideo(imagePromptId: number) {
-  const { data } = await api.post<{ message: string }>(`/story-image-prompts/${imagePromptId}/video/regenerate`)
+  const { data } = await api.post<{ message: string; data?: { id: number; video_url: string } }>(
+    `/story-image-prompts/${imagePromptId}/video/regenerate`
+  )
   return data
 }
 
@@ -62,6 +70,11 @@ export async function fetchSeries(page = 1) {
   return data
 }
 
+export async function fetchSeriesDetail(seriesSlug: string) {
+  const { data } = await api.get<SeriesDetailResponse>(`/series/${seriesSlug}`)
+  return data
+}
+
 export async function createSeries(links: string[], title?: string, description?: string) {
   const { data } = await api.post<{ series: StorySeries }>('/story-series', { links, title, description })
   return data
@@ -80,6 +93,11 @@ export async function requestStoryVideo(storyId: number) {
 export async function fetchStoryVideo(storyId: number) {
   const { data } = await api.get<{ data: StoryVideo }>(`/stories/${storyId}/video`)
   return data.data
+}
+
+export async function publishStoryVideoToPinterest(storyId: number) {
+  const { data } = await api.post<{ message: string; data: StoryVideo }>(`/stories/${storyId}/video/publish-pinterest`)
+  return data
 }
 
 export async function fetchStoryDetail(storySlug: string) {

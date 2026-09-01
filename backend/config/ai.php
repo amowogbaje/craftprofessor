@@ -240,6 +240,27 @@ return [
 
     'default_video_provider' => env('VIDEO_PROVIDER', 'veo'), // veo | agnes
 
+    /*
+    |--------------------------------------------------------------------------
+    | Video Generation Mode
+    |--------------------------------------------------------------------------
+    |
+    | 'queue' — dispatches GenerateVideoJob onto the 'videos' queue. Needs a
+    |   real queue worker actually running (Redis + Supervisor, or similar)
+    |   or requests will queue up and nothing will happen.
+    | 'sync' — runs SceneVideoGenerationService directly inside the HTTP
+    |   request/response cycle, no queue involved. For hosting without a
+    |   persistent worker process (e.g. plain shared/cPanel hosting) —
+    |   slower to respond (the request blocks until the provider call
+    |   finishes) but doesn't depend on anything else running.
+    | Either way, App\Notifications\SceneVideoGenerationNotification fires
+    | on success or failure, so the user finds out even if they've
+    | navigated away from the page that triggered it.
+    |
+    */
+
+    'video_generation_mode' => env('VIDEO_GENERATION_MODE', 'queue'), // queue | sync
+
     'video_providers' => [
         'agnes' => [
             'key' => env('AGNES_API_KEY'),

@@ -12,6 +12,7 @@ import { StoriesPage } from '@/pages/StoriesPage'
 import { StoryDetailPage } from '@/pages/StoryDetailPage'
 import { StoryCharactersPage, SeriesCharactersPage } from '@/pages/CharactersPage'
 import { SeriesPage } from '@/pages/SeriesPage'
+import { SeriesDetailPage } from '@/pages/SeriesDetailPage'
 import { StatsPage } from '@/pages/StatsPage'
 import { WalletPage } from '@/pages/WalletPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/stories/:slug" element={<StoryDetailPage />} />
           <Route path="/stories/:slug/characters" element={<StoryCharactersPage />} />
           <Route path="/series" element={<SeriesPage />} />
+          <Route path="/series/:slug" element={<SeriesDetailPage />} />
           <Route path="/series/:slug/characters" element={<SeriesCharactersPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/wallet" element={<WalletPage />} />

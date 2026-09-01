@@ -11,6 +11,7 @@ class SocialPost extends Model
         'user_id',
         'story_image_prompt_id',
         'video_id',
+        'story_video_id',
         'platform',
         'pinterest_board_id',
         'cause_broadcast_id',
@@ -37,6 +38,11 @@ class SocialPost extends Model
     public function video(): BelongsTo
     {
         return $this->belongsTo(Video::class);
+    }
+
+    public function storyVideo(): BelongsTo
+    {
+        return $this->belongsTo(StoryVideo::class);
     }
 
     public function pinterestBoard(): BelongsTo

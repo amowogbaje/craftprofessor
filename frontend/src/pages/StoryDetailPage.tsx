@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, RotateCcw, Users, Clapperboard, MapPin, Package } from 'lucide-react'
+import { Loader2, RotateCcw, Users, Clapperboard, MapPin, Package, ArrowRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -69,8 +69,8 @@ function SceneVideoAction({ scene, storySlug }: { scene: CharacterScene; storySl
 
   const generate = useMutation({
     mutationFn: () => requestVideo(scene.id),
-    onSuccess: () => {
-      toast({ title: 'Video queued', description: `Scene ${scene.scene_number ?? scene.id} — this can take a few minutes.` })
+    onSuccess: (data) => {
+      toast({ title: data.data ? 'Video ready' : 'Video queued', description: data.message })
       invalidate()
     },
     onError: (err) => toast({ title: 'Could not start video', description: apiErrorMessage(err), variant: 'destructive' }),
@@ -78,8 +78,8 @@ function SceneVideoAction({ scene, storySlug }: { scene: CharacterScene; storySl
 
   const regenerate = useMutation({
     mutationFn: () => regenerateVideo(scene.id),
-    onSuccess: () => {
-      toast({ title: 'Regenerating', description: `Previous clip cleared for scene ${scene.scene_number ?? scene.id}.` })
+    onSuccess: (data) => {
+      toast({ title: data.data ? 'Regenerated' : 'Regenerating', description: data.message })
       invalidate()
     },
     onError: (err) => toast({ title: 'Could not regenerate', description: apiErrorMessage(err), variant: 'destructive' }),
@@ -122,8 +122,9 @@ export function StoryDetailPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>
   }
 
-  const { data: story, characters, environments, props, characters_path: charactersPath } = query.data
+  const { data: story, characters, environments, props, characters_scope: charactersScope, characters_path: charactersPath } = query.data
   const scenes = story.image_prompts ?? []
+  const isEpisode = charactersScope === 'series' && !!story.series
 
   return (
     <div className="flex flex-col gap-8">
@@ -137,9 +138,29 @@ export function StoryDetailPage() {
         <StoryVideoAction story={story} />
       </div>
 
-      <AssetStrip title="Characters" icon={Users} assets={characters} linkTo={charactersPath} />
-      <AssetStrip title="Environments" icon={MapPin} assets={environments} />
-      <AssetStrip title="Props" icon={Package} assets={props} />
+      {isEpisode ? (
+        // Episodes share their character/environment/prop pool with every
+        // other episode in the series — shown once on the series page
+        // rather than repeated (and potentially stale) on each episode.
+        <Link to={`/series/${story.series?.slug}`}>
+          <Card className="transition hover:border-primary">
+            <CardContent className="flex items-center justify-between gap-3 py-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                Characters, environments &amp; props are shared across every episode of{' '}
+                <span className="font-medium">{story.series?.title}</span>
+              </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      ) : (
+        <>
+          <AssetStrip title="Characters" icon={Users} assets={characters} linkTo={charactersPath} />
+          <AssetStrip title="Environments" icon={MapPin} assets={environments} />
+          <AssetStrip title="Props" icon={Package} assets={props} />
+        </>
+      )}
 
       <div>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Scenes ({scenes.length})</h2>

@@ -3,6 +3,7 @@
 namespace App\Services\SocialPlatforms;
 
 use App\Models\StoryImagePrompt;
+use App\Models\StoryVideo;
 use App\Services\PinterestService;
 use App\Services\SocialPlatforms\Contracts\PublishesImages;
 use App\Services\SocialPlatforms\Contracts\PublishesRawImage;
@@ -76,6 +77,54 @@ class PinterestPlatform extends AbstractSocialPlatform implements PublishesImage
             return SocialPostResult::success($pinId);
         } catch (\Throwable $e) {
             $this->log()->error('PinterestPlatform: publishRawVideo failed', ['error' => $e->getMessage()]);
+            return SocialPostResult::failure($e->getMessage());
+        }
+    }
+
+    /**
+     * The assembled, narrated-and-captioned StoryVideo (see
+     * StoryVideoAssemblyService) — deliberately never a raw per-scene
+     * clip, always the finished "mixed copy." Posted to this account's
+     * single best-guess board, same simpler semantics as publishRawVideo()
+     * rather than publishToBoards()'s multi-board fan-out — a story video
+     * is a one-off flagship post per story, not recurring content that
+     * benefits from spreading across boards.
+     *
+     * Title/description/link/cover image come from the story's first
+     * scene (its hook) since there's no story-level pinterest_* field of
+     * its own.
+     */
+    public function publishStoryVideo(StoryVideo $storyVideo): SocialPostResult
+    {
+        try {
+            $pinterest = PinterestService::forAccount($this->account);
+            $boardId = $this->account->board_id ?? $pinterest->getLastBoardId();
+
+            $firstScene = $storyVideo->story->imagePrompts()->ordered()->first();
+            $title = $firstScene?->pinterest_title ?: ($storyVideo->story->title ?: 'A story');
+            $description = $firstScene?->pinterest_description;
+            $link = $firstScene?->pinterest_link ?: $storyVideo->story->story_link;
+            $coverImageUrl = $firstScene?->image_generated_url;
+
+            $mediaId = $pinterest->registerAndUploadVideo($storyVideo->video_url);
+            $pinId = $pinterest->postVideoPinToBoard($title, $description, $link, $mediaId, $boardId, $coverImageUrl);
+
+            $this->recordPost([
+                'story_video_id' => $storyVideo->id,
+                'status' => 'posted',
+                'external_post_id' => $pinId,
+            ]);
+
+            return SocialPostResult::success($pinId);
+        } catch (\Throwable $e) {
+            $this->log()->error('PinterestPlatform: publishStoryVideo failed', ['error' => $e->getMessage()]);
+
+            $this->recordPost([
+                'story_video_id' => $storyVideo->id,
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ]);
+
             return SocialPostResult::failure($e->getMessage());
         }
     }

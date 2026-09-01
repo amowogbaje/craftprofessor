@@ -114,7 +114,13 @@ class StoryVideoAssemblyService
             $finalPath = "{$workDir}/final.mp4";
 
             if (!empty($audioPaths)) {
-                $audioPath = $this->concat($audioPaths, $workDir, 'narration.mp3', video: false);
+                // Concatenated with -c:a aac below — .aac (raw ADTS), not
+                // .mp3. An AAC bitstream in an .mp3-extensioned container
+                // fails ffmpeg's strict MP3 muxer validation outright
+                // ("Invalid audio stream. Exactly one MP3 audio stream is
+                // required.") — caught by actually running this pipeline
+                // end-to-end before shipping it, not by inspection.
+                $audioPath = $this->concat($audioPaths, $workDir, 'narration.aac', video: false);
                 $this->mux($visualPath, $audioPath, $finalPath);
             } else {
                 // No narration generated yet for any scene — ship a silent
@@ -283,12 +289,13 @@ class StoryVideoAssemblyService
     }
 
     /**
-     * Splits narration text into ~SEGMENT_SECONDS caption beats,
-     * proportioning word count by each beat's share of the total
-     * duration. There's no word-level timing from TTS to work from, so
-     * this is a reasonable approximation rather than exact sync — good
-     * enough for readable, roughly-paced captions without needing forced
-     * alignment.
+     * Splits narration text into caption "cards" of at most 2 sentences
+     * each — a full thought at a time, not an arbitrary word-count cut —
+     * then times each card proportionally to its share of the total word
+     * count. There's no word-level timing from TTS to work from, so this
+     * is a reasonable approximation rather than exact sync, but grouping
+     * by sentence means a caption card never stops mid-thought the way a
+     * fixed ~5s window could.
      *
      * DIALOGUE extension point: this takes one (text, duration) pair
      * today because that's one narration line. Multi-speaker dialogue
@@ -306,33 +313,39 @@ class StoryVideoAssemblyService
             return [];
         }
 
-        $words = preg_split('/\s+/', $text) ?: [];
-        $wordCount = count($words);
+        // Split on sentence-ending punctuation, keeping it attached to the
+        // sentence it closes. Falls back to the whole text as one
+        // "sentence" if there's no punctuation to split on at all.
+        $sentences = preg_split('/(?<=[.!?])\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [$text];
+        $sentences = array_values(array_filter(array_map('trim', $sentences), fn ($s) => $s !== ''));
 
-        $beatCount = max(1, (int) ceil($totalDuration / self::SEGMENT_SECONDS));
+        if (empty($sentences)) {
+            return [];
+        }
+
+        // At most 2 sentences per caption card.
+        $cards = [];
+        for ($i = 0; $i < count($sentences); $i += 2) {
+            $cards[] = trim(implode(' ', array_slice($sentences, $i, 2)));
+        }
+
+        $totalWords = max(1, str_word_count($text));
         $segments = [];
         $elapsed = 0.0;
-        $wordIndex = 0;
+        $remaining = $totalDuration;
+        $cardCount = count($cards);
 
-        for ($i = 0; $i < $beatCount; $i++) {
-            $isLast = $i === $beatCount - 1;
-            $beatDuration = $isLast ? ($totalDuration - $elapsed) : self::SEGMENT_SECONDS;
-            $beatDuration = max(0.1, $beatDuration);
+        foreach ($cards as $i => $cardText) {
+            $isLast = $i === $cardCount - 1;
+            $cardWords = max(1, str_word_count($cardText));
+            $share = $cardWords / $totalWords;
 
-            $share = $beatDuration / $totalDuration;
-            $wordsForBeat = $isLast
-                ? ($wordCount - $wordIndex)
-                : max(1, (int) round($wordCount * $share));
-            $wordsForBeat = max(0, min($wordsForBeat, $wordCount - $wordIndex));
+            $duration = $isLast ? $remaining : min($remaining, max(0.6, round($totalDuration * $share, 2)));
 
-            $beatText = implode(' ', array_slice($words, $wordIndex, $wordsForBeat));
-            $wordIndex += $wordsForBeat;
+            $segments[] = ['start' => $elapsed, 'duration' => $duration, 'text' => $cardText];
 
-            if ($beatText !== '') {
-                $segments[] = ['start' => $elapsed, 'duration' => $beatDuration, 'text' => $beatText];
-            }
-
-            $elapsed += $beatDuration;
+            $elapsed += $duration;
+            $remaining -= $duration;
         }
 
         return $segments;

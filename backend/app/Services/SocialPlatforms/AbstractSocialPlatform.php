@@ -42,6 +42,7 @@ abstract class AbstractSocialPlatform
             [
                 'story_image_prompt_id' => $attributes['story_image_prompt_id'] ?? null,
                 'video_id' => $attributes['video_id'] ?? null,
+                'story_video_id' => $attributes['story_video_id'] ?? null,
                 'platform' => $this->name(),
                 'pinterest_board_id' => $attributes['pinterest_board_id'] ?? null,
             ],

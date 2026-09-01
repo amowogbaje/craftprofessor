@@ -4,6 +4,23 @@ export interface Wallet {
   lifetime_spent: number
 }
 
+export interface AppNotification {
+  id: string
+  type: string
+  data: {
+    kind: string
+    succeeded?: boolean
+    message: string
+    story_id?: number | null
+    story_image_prompt_id?: number | null
+    scene_number?: number | null
+    video_url?: string | null
+    error_message?: string | null
+  }
+  read_at: string | null
+  created_at: string
+}
+
 export interface PublishSetting {
   id: number
   daily_image_limit: number
@@ -91,6 +108,10 @@ export interface StoryVideo {
   last_generation_error: string | null
   generation_attempts: number
   generated_at: string | null
+  posted_to_pinterest: boolean
+  pinterest_posted_at: string | null
+  pinterest_pin_id: string | null
+  last_pinterest_error: string | null
 }
 
 export interface StoryDetailResponse {
@@ -131,6 +152,24 @@ export interface StorySeries {
   external_url?: string | null
   stories_count?: number
   created_at: string
+}
+
+export interface StoryEpisode {
+  id: number
+  slug: string
+  title: string | null
+  episode_number: number | null
+  prompt_generated: boolean
+  image_prompts_count?: number
+  created_at: string
+}
+
+export interface SeriesDetailResponse {
+  data: StorySeries
+  characters: Character[]
+  environments: Character[]
+  props: Character[]
+  episodes: StoryEpisode[]
 }
 
 export interface StoryVerseImportResult {

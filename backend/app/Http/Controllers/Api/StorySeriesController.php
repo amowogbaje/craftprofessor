@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreStorySeriesRequest;
+use App\Models\StorySeries;
 use App\Services\StorySeriesService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -68,5 +70,30 @@ class StorySeriesController extends Controller
                 ]),
             ],
         ], 201);
+    }
+
+    /**
+     * GET /api/series/{series:slug}
+     * Series detail: characters/environments/props shared across every
+     * episode (see StorySeries::characters() et al), plus the ordered
+     * list of episode stories — each one links to its own /stories/{slug}
+     * detail page from the frontend.
+     */
+    public function show(Request $request, StorySeries $series): JsonResponse
+    {
+        abort_if($request->user()->id !== $series->user_id, 403, 'Not your series.');
+
+        $series->loadCount('stories');
+
+        return response()->json([
+            'data' => $series,
+            'characters' => $series->characters()->orderBy('name')->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'environments' => $series->environments()->orderBy('name')->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'props' => $series->props()->orderBy('name')->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'episodes' => $series->stories()
+                ->orderBy('episode_number')
+                ->withCount('imagePrompts')
+                ->get(['id', 'slug', 'title', 'episode_number', 'prompt_generated', 'created_at']),
+        ]);
     }
 }

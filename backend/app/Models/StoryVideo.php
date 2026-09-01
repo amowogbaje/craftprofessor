@@ -25,11 +25,17 @@ class StoryVideo extends Model
         'last_generation_error',
         'generation_attempts',
         'generated_at',
+        'posted_to_pinterest',
+        'pinterest_posted_at',
+        'pinterest_pin_id',
+        'last_pinterest_error',
     ];
 
     protected $casts = [
         'generated_at' => 'datetime',
         'duration_seconds' => 'float',
+        'posted_to_pinterest' => 'boolean',
+        'pinterest_posted_at' => 'datetime',
     ];
 
     public function story(): BelongsTo

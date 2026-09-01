@@ -50,6 +50,11 @@ return [
         // App\Console\Commands\PostPinterestPins itself (not just by how
         // often it's scheduled) — see App\Models\StoryImagePrompt::scopeAwaitingPinterestPost().
         'max_pins_per_user_per_day' => env('PINTEREST_MAX_PINS_PER_USER_PER_DAY', 5),
+        // Separate, smaller cap for full story-video posts (see
+        // App\Console\Commands\PostPinterestStoryVideos) — a story video
+        // is a one-off flagship post per finished story, not recurring
+        // per-scene content, so it doesn't share the cap above.
+        'max_story_videos_per_user_per_day' => env('PINTEREST_MAX_STORY_VIDEOS_PER_USER_PER_DAY', 3),
         // Timezone the daily cap resets in. Should match the timezone
         // Scheduler 3 runs in (routes/console.php) so "today" means the
         // same thing in both places.

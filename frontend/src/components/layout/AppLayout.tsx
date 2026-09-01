@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext'
 import { fetchWallet } from '@/lib/api-wallet'
 import { cn } from '@/lib/utils'
 import { MobileMoreSheet } from './MobileMoreSheet'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Feed', icon: LayoutGrid },
@@ -37,7 +38,8 @@ export function AppLayout() {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Film className="h-4 w-4" />
           </div>
-          <span className="font-display text-lg font-medium">Storyframe</span>
+          <span className="flex-1 font-display text-lg font-medium">Storyframe</span>
+          <NotificationBell />
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
@@ -92,10 +94,13 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border px-5 md:hidden">
           <span className="font-display text-lg font-medium">Storyframe</span>
-          <span className="flex items-center gap-1.5 font-mono text-sm">
-            <Coins className="h-4 w-4 text-scheduled" />
-            {wallet?.balance ?? '—'}
-          </span>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <span className="flex items-center gap-1.5 font-mono text-sm">
+              <Coins className="h-4 w-4 text-scheduled" />
+              {wallet?.balance ?? '—'}
+            </span>
+          </div>
         </header>
         <main className="flex-1 px-5 py-6 pb-24 md:px-8 md:py-8 md:pb-8">
           <Outlet />
