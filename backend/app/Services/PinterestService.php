@@ -418,14 +418,17 @@ class PinterestService
         return $this->get('/boards', ['page_size' => $pageSize]);
     }
 
-    public function listPins(?string $boardId = null, int $pageSize = 25): array
+    public function listPins(?string $boardId = null, int $pageSize = 25, ?string $bookmark = null): array
     {
         $this->requireAuth();
         $this->requireScope('pins:read');
 
         $endpoint = $boardId ? "/boards/{$boardId}/pins" : '/pins';
 
-        return $this->get($endpoint, ['page_size' => $pageSize]);
+        return $this->get($endpoint, array_filter([
+            'page_size' => $pageSize,
+            'bookmark' => $bookmark,
+        ]));
     }
 
     public function listAdAccounts(): array
@@ -698,4 +701,113 @@ class PinterestService
 
         return $response->json('id');
     }
+
+    /**
+     * Walks every page of pins (optionally scoped to a board) and returns
+     * the ones whose title matches. Exact match by default; pass
+     * $exactMatch = false to match on substring instead.
+     */
+    public function findPinsByTitle(string $title, ?string $boardId = null, bool $exactMatch = true): array
+    {
+        $this->requireAuth();
+        $this->requireScope('pins:read');
+
+        $matches = [];
+        $bookmark = null;
+
+        do {
+            $page = $this->listPins($boardId, 100, $bookmark);
+            $items = $page['items'] ?? [];
+
+            foreach ($items as $pin) {
+                $pinTitle = $pin['title'] ?? '';
+                $isMatch = $exactMatch
+                    ? $pinTitle === $title
+                    : Str::contains($pinTitle, $title, ignoreCase: true);
+
+                if ($isMatch) {
+                    $matches[] = $pin;
+                }
+            }
+
+            $bookmark = $page['bookmark'] ?? null;
+        } while (!empty($bookmark));
+
+        Log::channel('pinterest')->info('PinterestService: findPinsByTitle results', [
+            'environment' => $this->environment,
+            'title' => $title,
+            'board_id' => $boardId,
+            'matches_found' => count($matches),
+        ]);
+
+        return $matches;
+    }
+
+    public function deletePin(string $pinId): bool
+    {
+        $this->requireAuth();
+        $this->requireScope('pins:write');
+
+        $response = Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->delete("{$this->baseUrl()}/pins/{$pinId}");
+
+        if ($response->failed()) {
+            Log::channel('pinterest')->error('PinterestService: pin deletion failed', [
+                'environment' => $this->environment,
+                'pin_id' => $pinId,
+                'status' => $response->status(),
+                'body' => Str::limit($response->body(), 1000),
+            ]);
+            throw new RuntimeException("Pinterest pin deletion failed ({$response->status()}): {$response->body()}");
+        }
+
+        Log::channel('pinterest')->info('PinterestService: pin deleted', [
+            'environment' => $this->environment,
+            'pin_id' => $pinId,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Finds every pin matching $title (optionally scoped to a board) and
+     * deletes them. Returns ['matched' => int, 'deleted' => [ids], 'failed' => [id => error]].
+     * Pass $dryRun = true to see what would be deleted without deleting anything.
+     */
+    public function deletePinsByTitle(string $title, ?string $boardId = null, bool $exactMatch = true, bool $dryRun = false): array
+    {
+        $matches = $this->findPinsByTitle($title, $boardId, $exactMatch);
+
+        $result = ['matched' => count($matches), 'deleted' => [], 'failed' => []];
+
+        foreach ($matches as $pin) {
+            $pinId = $pin['id'];
+
+            if ($dryRun) {
+                $result['deleted'][] = $pinId; // "would delete"
+                continue;
+            }
+
+            try {
+                $this->deletePin($pinId);
+                $result['deleted'][] = $pinId;
+            } catch (\Throwable $e) {
+                $result['failed'][$pinId] = $e->getMessage();
+            }
+        }
+
+        Log::channel('pinterest')->info('PinterestService: deletePinsByTitle summary', [
+            'environment' => $this->environment,
+            'title' => $title,
+            'board_id' => $boardId,
+            'dry_run' => $dryRun,
+            'matched' => $result['matched'],
+            'deleted_count' => count($result['deleted']),
+            'failed_count' => count($result['failed']),
+        ]);
+
+        return $result;
+    }
 }
+
