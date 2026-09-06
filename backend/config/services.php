@@ -49,12 +49,15 @@ return [
         // Hard cap on Pins posted per user per day, enforced by
         // App\Console\Commands\PostPinterestPins itself (not just by how
         // often it's scheduled) — see App\Models\StoryImagePrompt::scopeAwaitingPinterestPost().
-        'max_pins_per_user_per_day' => env('PINTEREST_MAX_PINS_PER_USER_PER_DAY', 5),
+        // Per the daily posting mix in the project spec ("4 images + 1
+        // video" per day), default is 4.
+        'max_pins_per_user_per_day' => env('PINTEREST_MAX_PINS_PER_USER_PER_DAY', 4),
         // Separate, smaller cap for full story-video posts (see
         // App\Console\Commands\PostPinterestStoryVideos) — a story video
         // is a one-off flagship post per finished story, not recurring
-        // per-scene content, so it doesn't share the cap above.
-        'max_story_videos_per_user_per_day' => env('PINTEREST_MAX_STORY_VIDEOS_PER_USER_PER_DAY', 3),
+        // per-scene content, so it doesn't share the cap above. Default 1
+        // to match the "4 images + 1 video" daily mix.
+        'max_story_videos_per_user_per_day' => env('PINTEREST_MAX_STORY_VIDEOS_PER_USER_PER_DAY', 1),
         // Timezone the daily cap resets in. Should match the timezone
         // Scheduler 3 runs in (routes/console.php) so "today" means the
         // same thing in both places.
@@ -87,11 +90,27 @@ return [
     ],
 
     'youtube' => [
-        // Standard Google OAuth2 app (same credential shape as "Sign in
-        // with Google"), scoped to https://www.googleapis.com/auth/youtube.upload
-        'client_id' => env('YOUTUBE_CLIENT_ID'),
-        'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
+        // Falls back to the same GOOGLE_CLIENT_ID/SECRET used for
+        // "Sign in with Google" (see App\Http\Controllers\Auth\GoogleAuthController
+        // / services.google below) if YOUTUBE_CLIENT_ID/SECRET aren't set —
+        // no need to create a second OAuth client just for this. See
+        // YouTube.md, "Reusing your Google Sign-In OAuth client" for the
+        // two things that still need doing in Cloud Console either way
+        // (adding the youtube.upload/readonly scopes to that client's
+        // consent screen, and adding YOUTUBE_REDIRECT_URI as an
+        // additional authorized redirect URI on it).
+        'client_id' => env('YOUTUBE_CLIENT_ID', env('GOOGLE_CLIENT_ID')),
+        'client_secret' => env('YOUTUBE_CLIENT_SECRET', env('GOOGLE_CLIENT_SECRET')),
         'redirect_uri' => env('YOUTUBE_REDIRECT_URI'),
+
+        // Hard cap on Shorts posted per user per day, enforced by
+        // App\Console\Commands\PostYouTubeShorts itself. Default 1 to
+        // match the daily posting mix in the project spec ("4 images + 1
+        // video" per day — the "1 video" is shared with the Pinterest
+        // story-video post, both drawn from the same assembled StoryVideo).
+        'max_shorts_per_user_per_day' => env('YOUTUBE_MAX_SHORTS_PER_USER_PER_DAY', 1),
+        // Timezone the daily cap above resets in. See YouTube.md.
+        'daily_cap_timezone' => env('YOUTUBE_DAILY_CAP_TIMEZONE', 'UTC'),
     ],
 
     'instagram' => [
