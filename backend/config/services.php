@@ -43,7 +43,7 @@ return [
         'access_token' => env('PINTEREST_ACCESS_TOKEN'),
         'board_id' => env('PINTEREST_BOARD_ID'),
         'environment' => env('PINTEREST_ENVIRONMENT', 'production'), // "production" or "sandbox"
-        'default_board_name' => env('PINTEREST_DEFAULT_BOARD_NAME', 'Storyframe'),
+        'default_board_name' => env('PINTEREST_DEFAULT_BOARD_NAME', 'StoryVerse'),
         'default_board_description' => env('PINTEREST_DEFAULT_BOARD_DESCRIPTION'),
 
         // Hard cap on Pins posted per user per day, enforced by

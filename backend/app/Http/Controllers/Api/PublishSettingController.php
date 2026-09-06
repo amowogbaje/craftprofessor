@@ -17,7 +17,7 @@ class PublishSettingController extends Controller
 
     /**
      * PUT /api/publish-settings
-     * { daily_image_limit, daily_video_limit, monthly_image_limit?, monthly_video_limit?, timezone?, auto_publish? }
+     * { daily_image_limit, daily_video_limit, monthly_image_limit?, monthly_video_limit?, timezone?, auto_publish?, auto_generate_scene_videos? }
      */
     public function update(Request $request): JsonResponse
     {
@@ -28,6 +28,7 @@ class PublishSettingController extends Controller
             'monthly_video_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'timezone' => ['sometimes', 'timezone'],
             'auto_publish' => ['sometimes', 'boolean'],
+            'auto_generate_scene_videos' => ['sometimes', 'boolean'],
         ]);
 
         if ($validator->fails()) {

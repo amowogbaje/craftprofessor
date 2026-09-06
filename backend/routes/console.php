@@ -35,6 +35,19 @@ Schedule::command('story:generate-narration-audio --limit=10')
     ->withoutOverlapping(10)
     ->runInBackground();
 
+// Scheduler 2c: automatic per-scene video clips — opt-in only (see
+// PublishSetting::auto_generate_scene_videos / AutoGenerateSceneVideos).
+// Users who haven't turned this on are entirely unaffected by this
+// entry; their scenes stay on the manual/on-demand path
+// (VideoController) exactly as before this feature existed. Same 15-min
+// cadence as images/narration above since video generation only ever
+// picks up scenes that already have an image, so there's no reason for
+// it to poll faster than the thing that feeds it.
+Schedule::command('story:auto-generate-videos --limit=25')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->runInBackground();
+
 // Scheduler 3a: refresh Pinterest tokens ~10 min before the posting window
 // opens, with a buffer wide enough to cover the whole window below (23:00
 // through 03:00 = up to 4h, so 300 min / 5h of headroom).
@@ -72,6 +85,18 @@ Schedule::command('story:post-pinterest-story-video')
 Schedule::command('story:post-pinterest-story-video')
     ->everyThirtyMinutes()
     ->between('00:00', '03:00')
+    ->timezone('UTC')
+    ->withoutOverlapping();
+
+// Scheduler 3d: 1 YouTube Short/day — reuses the same assembled StoryVideo
+// as Scheduler 3c above, just posted to a different platform with its own
+// daily cap (services.youtube.max_shorts_per_user_per_day). Runs once,
+// inside the same overnight posting window as the rest of Scheduler 3,
+// rather than every 30 minutes like 3c — with a cap of 1/day the first
+// invocation each day is normally the only one that does anything, so
+// there's no need to poll as often.
+Schedule::command('youtube:post-daily-short')
+    ->dailyAt('23:10')
     ->timezone('UTC')
     ->withoutOverlapping();
 

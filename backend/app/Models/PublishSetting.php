@@ -13,10 +13,12 @@ class PublishSetting extends Model
     protected $fillable = [
         'user_id', 'daily_image_limit', 'daily_video_limit',
         'monthly_image_limit', 'monthly_video_limit', 'timezone', 'auto_publish',
+        'auto_generate_scene_videos',
     ];
 
     protected $casts = [
         'auto_publish' => 'boolean',
+        'auto_generate_scene_videos' => 'boolean',
     ];
 
     public function user(): BelongsTo
