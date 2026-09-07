@@ -188,10 +188,23 @@ export function StoryDetailPage() {
                       {scene.video ? 'VIDEO' : 'IMAGE'}
                     </Badge>
                   </div>
-                  {scene.narration && (
-                    <p className="line-clamp-3 text-xs text-muted-foreground" title="Also burned in as captions on the assembled video">
-                      {scene.narration}
-                    </p>
+                  {scene.dialogue_lines && scene.dialogue_lines.length > 0 ? (
+                    <div
+                      className="space-y-0.5 text-xs text-muted-foreground"
+                      title="Spoken dialogue for this scene — burned in as per-line captions on the assembled video"
+                    >
+                      {scene.dialogue_lines.map((line, i) => (
+                        <p key={i} className="line-clamp-2">
+                          <span className="font-medium text-foreground">{line.character_name}:</span> {line.text}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    scene.narration && (
+                      <p className="line-clamp-3 text-xs text-muted-foreground" title="Also burned in as captions on the assembled video">
+                        {scene.narration}
+                      </p>
+                    )
                   )}
                   {slug && <SceneVideoAction scene={scene} storySlug={slug} />}
                 </CardContent>

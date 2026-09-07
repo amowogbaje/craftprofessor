@@ -39,9 +39,16 @@ function CharacterDetail({ characterId }: { characterId: number }) {
 
   return (
     <div>
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-        Scenes &amp; videos featuring {character.name} ({scenes.length})
-      </h2>
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-medium text-muted-foreground">
+          Scenes &amp; videos featuring {character.name} ({scenes.length})
+        </h2>
+        {character.voice && (
+          <Badge variant="secondary" className="shrink-0 text-[10px]" title="Dialogue voice assigned to this character">
+            Voice: {character.voice}
+          </Badge>
+        )}
+      </div>
       {scenes.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {scenes.map((scene) => (
@@ -64,7 +71,17 @@ function CharacterDetail({ characterId }: { characterId: number }) {
                     {scene.video ? 'VIDEO' : 'IMAGE'}
                   </Badge>
                 </div>
-                {scene.narration && <p className="line-clamp-2 text-xs text-muted-foreground">{scene.narration}</p>}
+                {scene.dialogue_lines && scene.dialogue_lines.length > 0 ? (
+                  <div className="space-y-0.5 text-xs text-muted-foreground">
+                    {scene.dialogue_lines.map((line, i) => (
+                      <p key={i} className="line-clamp-2">
+                        <span className="font-medium text-foreground">{line.character_name}:</span> {line.text}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  scene.narration && <p className="line-clamp-2 text-xs text-muted-foreground">{scene.narration}</p>
+                )}
               </CardContent>
             </Card>
           ))}

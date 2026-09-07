@@ -71,7 +71,7 @@ class StoryController extends Controller
 
         return response()->json([
             'data' => $story,
-            'characters' => $story->knownCharacters()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
+            'characters' => $story->knownCharacters()->get(['id', 'name', 'img_url', 'voice', 'story_id', 'series_id']),
             'environments' => $story->knownEnvironments()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
             'props' => $story->knownProps()->get(['id', 'name', 'img_url', 'story_id', 'series_id']),
             'characters_scope' => $story->isPartOfSeries() ? 'series' : 'story',

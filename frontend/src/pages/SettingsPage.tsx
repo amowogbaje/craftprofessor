@@ -15,11 +15,13 @@ export function SettingsPage() {
 
   const [dailyImages, setDailyImages] = useState(3)
   const [dailyVideos, setDailyVideos] = useState(1)
+  const [autoGenerateVideos, setAutoGenerateVideos] = useState(false)
 
   useEffect(() => {
     if (data) {
       setDailyImages(data.daily_image_limit)
       setDailyVideos(data.daily_video_limit)
+      setAutoGenerateVideos(data.auto_generate_scene_videos)
     }
   }, [data])
 
@@ -30,6 +32,19 @@ export function SettingsPage() {
       toast({ title: 'Publish limits saved' })
     },
     onError: (err) => toast({ title: 'Could not save', description: apiErrorMessage(err), variant: 'destructive' }),
+  })
+
+  const autoGenerateMutation = useMutation({
+    mutationFn: (value: boolean) => updatePublishSettings({ auto_generate_scene_videos: value }),
+    onSuccess: (_data, value) => {
+      queryClient.invalidateQueries({ queryKey: ['publish-settings'] })
+      toast({ title: value ? 'Automatic video generation enabled' : 'Automatic video generation disabled' })
+    },
+    onError: (err, _value, _ctx) => {
+      // Revert the optimistic checkbox flip if the save failed.
+      setAutoGenerateVideos((prev) => !prev)
+      toast({ title: 'Could not save', description: apiErrorMessage(err), variant: 'destructive' })
+    },
   })
 
   return (
@@ -84,6 +99,40 @@ export function SettingsPage() {
               {mutation.isPending ? 'Saving…' : 'Save limits'}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Scene video generation</CardTitle>
+          <CardDescription>
+            Choose whether per-scene AI video clips are generated automatically as scenes become ready, or only
+            when you trigger it yourself from a story's page. Either way, generation still stops once you hit the
+            "Videos per day" limit above.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
+              disabled={isLoading || autoGenerateMutation.isPending}
+              checked={autoGenerateVideos}
+              onChange={(e) => {
+                const value = e.target.checked
+                setAutoGenerateVideos(value)
+                autoGenerateMutation.mutate(value)
+              }}
+            />
+            <span className="flex flex-col">
+              <span className="text-sm font-medium">Automatically generate scene videos</span>
+              <span className="text-xs text-muted-foreground">
+                {autoGenerateVideos
+                  ? "On — scenes get a video clip automatically once they're ready, no click needed."
+                  : 'Off — click "Generate video" on a scene yourself when you want one.'}
+              </span>
+            </span>
+          </label>
         </CardContent>
       </Card>
     </div>

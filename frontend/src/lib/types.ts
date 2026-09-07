@@ -29,6 +29,7 @@ export interface PublishSetting {
   monthly_video_limit: number | null
   timezone: string
   auto_publish: boolean
+  auto_generate_scene_videos: boolean
 }
 
 export interface User {
@@ -71,6 +72,7 @@ export interface Character {
   name: string
   img_url: string | null
   img_url_quality?: string | null
+  voice?: string | null
   story_id: number | null
   series_id: number | null
 }
@@ -82,10 +84,18 @@ export interface CharactersResponse {
   data: Character[]
 }
 
+export interface DialogueLine {
+  character_name: string
+  text: string
+  audio_url?: string | null
+  audio_seconds?: number | null
+}
+
 export interface CharacterScene {
   id: number
   prompt: string
   narration: string | null
+  dialogue_lines?: DialogueLine[] | null
   scene_number: number | null
   image_generated_url: string | null
   status: ContentStatus
@@ -112,6 +122,10 @@ export interface StoryVideo {
   pinterest_posted_at: string | null
   pinterest_pin_id: string | null
   last_pinterest_error: string | null
+  posted_to_youtube: boolean
+  youtube_posted_at: string | null
+  youtube_video_id: string | null
+  last_youtube_error: string | null
 }
 
 export interface StoryDetailResponse {
