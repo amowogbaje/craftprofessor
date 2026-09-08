@@ -41,7 +41,7 @@ class GeminiTtsProvider implements TtsProviderContract
         return 'wav';
     }
 
-    public function speak(string $text): string
+    public function speak(string $text, ?string $voice = null): string
     {
         if (empty($this->apiKey)) {
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
@@ -59,7 +59,7 @@ class GeminiTtsProvider implements TtsProviderContract
                         'responseModalities' => ['AUDIO'],
                         'speechConfig' => [
                             'voiceConfig' => [
-                                'prebuiltVoiceConfig' => ['voiceName' => $this->voice],
+                                'prebuiltVoiceConfig' => ['voiceName' => $voice ?: $this->voice],
                             ],
                         ],
                     ],

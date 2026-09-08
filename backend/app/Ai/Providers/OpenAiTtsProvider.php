@@ -32,7 +32,7 @@ class OpenAiTtsProvider implements TtsProviderContract
         return 'mp3';
     }
 
-    public function speak(string $text): string
+    public function speak(string $text, ?string $voice = null): string
     {
         if (empty($this->apiKey)) {
             // A missing key must fail here, not at construction — this
@@ -49,7 +49,7 @@ class OpenAiTtsProvider implements TtsProviderContract
                 ->timeout(60)
                 ->post("{$this->baseUrl}/audio/speech", [
                     'model' => $this->model,
-                    'voice' => $this->voice,
+                    'voice' => $voice ?: $this->voice,
                     'input' => $text,
                     'response_format' => 'mp3',
                 ])

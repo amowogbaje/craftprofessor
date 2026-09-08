@@ -297,18 +297,38 @@ return [
             'base_url' => env('GEMINI_TTS_URL', 'https://generativelanguage.googleapis.com/v1beta'),
             'model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
             'voice' => env('GEMINI_TTS_VOICE', 'Kore'), // see ai.google.dev/gemini-api/docs/speech-generation for the full voice list
+            // Rotated through by ImageGeneratorService::pickVoiceForNewCharacter()
+            // so distinct characters in a story get distinct dialogue
+            // voices — a small, deliberately varied slice of Gemini's full
+            // prebuilt voice list (a mix of lower/higher, calmer/brighter
+            // voices), not every voice Gemini offers.
+            'voice_pool' => array_filter(explode(',', env(
+                'GEMINI_TTS_VOICE_POOL',
+                'Puck,Kore,Charon,Fenrir,Aoede,Leda,Orus,Zephyr'
+            ))),
         ],
         'openai' => [
             'key' => env('OPENAI_API_KEY'),
             'base_url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'model' => env('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'),
             'voice' => env('OPENAI_TTS_VOICE', 'alloy'),
+            'voice_pool' => array_filter(explode(',', env(
+                'OPENAI_TTS_VOICE_POOL',
+                'alloy,verse,ballad,ash,sage,coral'
+            ))),
         ],
         'eleven' => [
             'key' => env('ELEVENLABS_API_KEY'),
             'voice_id' => env('ELEVENLABS_VOICE_ID'),
             'base_url' => env('ELEVENLABS_BASE_URL', 'https://api.elevenlabs.io/v1'),
             'model' => env('ELEVENLABS_MODEL', 'eleven_multilingual_v2'),
+            // No sensible default — ElevenLabs voice ids are account-specific
+            // (cloned/library voices you've added), unlike Gemini/OpenAI's
+            // named built-in voices above. Set ELEVENLABS_VOICE_POOL to a
+            // comma-separated list of your own voice ids to enable
+            // distinct per-character dialogue voices on this provider;
+            // leave unset and every line just uses `voice_id` above.
+            'voice_pool' => array_filter(explode(',', env('ELEVENLABS_VOICE_POOL', ''))),
         ],
     ],
 

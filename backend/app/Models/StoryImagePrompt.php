@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Support\Collection;
-
 class StoryImagePrompt extends Model
 {
     use HasFactory;
@@ -35,6 +34,7 @@ class StoryImagePrompt extends Model
         'story_id',
         'prompt',
         'narration',
+        'dialogue_lines',
         'narration_audio_url',
         'narration_audio_seconds',
         'last_narration_error',
@@ -62,6 +62,7 @@ class StoryImagePrompt extends Model
     ];
 
     protected $casts = [
+        'dialogue_lines' => 'array',
         'main_character_ids' => 'array',
         'main_environment_ids' => 'array',
         'main_prop_ids' => 'array',
@@ -110,6 +111,60 @@ class StoryImagePrompt extends Model
         );
     }
 
+    /**
+     * True only once this scene has a video that actually finished (has a
+     * video_url) — NOT just "a VideoPrompt row exists." VideoGeneratorService
+     * creates the Video row up front (before the provider call) so it has
+     * something to update on success/failure, so an existing Video row with
+     * a null video_url means a *failed* attempt, not a completed one. Every
+     * "is this already done?" check in this app should use this method
+     * rather than `videoPrompt()->exists()` / `video()->exists()` directly —
+     * see clearVideoAttempt() below for why that distinction used to cause a
+     * stuck state.
+     */
+    public function hasCompletedVideo(): bool
+    {
+        return $this->video()->whereNotNull('video_url')->exists();
+    }
+
+    /**
+     * Deletes any unfinished/failed video generation attempt for this scene
+     * (a VideoPrompt row, and/or a Video row under it, that never got a
+     * video_url) so a fresh attempt can start clean.
+     *
+     * Why this exists: VideoPromptService and VideoGeneratorService both
+     * create their row *before* calling out to the AI provider (so there's
+     * something to attach the eventual result — or error — to), and neither
+     * deletes that row if the provider call throws. That's fine for
+     * historical/debugging purposes, but it used to mean
+     * VideoController::store()'s "has a video already been requested?"
+     * guard — which only checked whether a VideoPrompt row existed at all —
+     * stayed permanently true after any failure, even though nothing had
+     * actually succeeded. The user's only way out was knowing to call the
+     * separate /regenerate endpoint instead of just trying again.
+     *
+     * Passing `true` also clears a *completed* video (regenerate's
+     * behavior); the default only clears stale/failed attempts, leaving a
+     * real completed video alone.
+     */
+    public function clearVideoAttempt(bool $evenIfCompleted = false): void
+    {
+        $videoPrompt = $this->videoPrompt;
+
+        if (!$videoPrompt) {
+            return;
+        }
+
+        if (!$evenIfCompleted && $this->hasCompletedVideo()) {
+            return;
+        }
+
+        Video::where('video_prompt_id', $videoPrompt->id)->delete();
+        $videoPrompt->delete();
+        $this->unsetRelation('videoPrompt');
+        $this->unsetRelation('video');
+    }
+
     /** Every attempted post (any platform, any board) for this image. */
     public function socialPosts(): HasMany
     {
@@ -154,6 +209,12 @@ class StoryImagePrompt extends Model
     public function scopeDueForPublishing($query)
     {
         return $query->where('status', self::STATUS_SCHEDULED)->where('scheduled_at', '<=', now());
+    }
+
+    /** True when this scene has actual character-to-character dialogue lines rather than plain narration. */
+    public function hasDialogue(): bool
+    {
+        return !empty($this->dialogue_lines);
     }
 
     /** Story reading/playback order — scenes are generated in story order. */

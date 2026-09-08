@@ -229,7 +229,7 @@ class DashboardController extends Controller
             'pinterest_pin_id' => $p->pinterest_pin_id,
             'status' => $p->status, 'scheduled_at' => $p->scheduled_at, 'published_at' => $p->published_at,
             'story_id' => $p->story_id, 'source_image_prompt_id' => null,
-            'has_video' => $p->videoPrompt()->exists(),
+            'has_video' => $p->hasCompletedVideo(),
             'sort_at' => $p->generated_at ?? $p->created_at,
         ];
     }

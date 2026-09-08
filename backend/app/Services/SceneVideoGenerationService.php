@@ -52,6 +52,8 @@ class SceneVideoGenerationService
             throw new InsufficientCoinsException($requiredCoins, $user->wallet->balance);
         }
 
+        $videoPrompt = null;
+
         try {
             $videoPrompt = $this->promptService->generate($scene, $user);
             $video = $this->videoService->generate($videoPrompt, $user);
@@ -66,6 +68,21 @@ class SceneVideoGenerationService
 
             return $video;
         } catch (\Throwable $e) {
+            // VideoPromptService already records failures at its own stage.
+            // This covers the other case: the prompt stage succeeded (so
+            // $videoPrompt has no error on it) but the video-provider stage
+            // (VideoGeneratorService, or the "no video" RuntimeException
+            // above) is what actually failed — without this, that
+            // VideoPrompt row would sit there looking successful right up
+            // until StoryImagePrompt::clearVideoAttempt() removes it on the
+            // next retry.
+            if ($videoPrompt && is_null($videoPrompt->fresh()?->last_generation_error)) {
+                $videoPrompt->update([
+                    'last_generation_error' => \Illuminate\Support\Str::limit($e->getMessage(), 2000),
+                    'generation_attempts' => $videoPrompt->generation_attempts + 1,
+                ]);
+            }
+
             if ($notify) {
                 $user->notify(new SceneVideoGenerationNotification($scene, succeeded: false, errorMessage: $e->getMessage()));
             }

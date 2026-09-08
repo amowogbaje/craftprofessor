@@ -101,6 +101,10 @@ class ImageGeneratorService
                     'story_id' => $story->id,
                     'prompt' => $entry['prompt'],
                     'narration' => $entry['narration'] ?? null,
+                    'dialogue_lines' => !empty($entry['dialogue']) ? array_map(
+                        fn ($line) => ['character_name' => $line['character_name'], 'text' => $line['text']],
+                        $entry['dialogue']
+                    ) : null,
                     'scene_number' => $index + 1,
                     'caption' => $entry['caption'] ?? null,
                     'status' => StoryImagePrompt::STATUS_PUBLISHED,
@@ -152,6 +156,37 @@ class ImageGeneratorService
      * @param class-string $modelClass
      * @return \Illuminate\Support\Collection<string, \Illuminate\Database\Eloquent\Model> keyed by lowercased name
      */
+    /**
+     * Rotates through config('ai.tts_providers.<active provider>.voice_pool')
+     * so each new character in a story gets a different voice than the
+     * others already cast for it, rather than everyone defaulting to the
+     * TTS provider's single default voice (which would make dialogue
+     * between two characters sound like one person talking to themselves).
+     * Picks by index (this story's/series' existing voiced-character count
+     * modulo pool size) rather than randomly, so re-running generation for
+     * the same story is deterministic. Returns null if the active
+     * provider has no pool configured (e.g. ElevenLabs with no
+     * ELEVENLABS_VOICE_POOL set) — dialogue for that scene then falls back
+     * to the provider's single default voice for every line, which still
+     * works, just without distinct voices per character.
+     */
+    protected function pickVoiceForNewCharacter(Story $story): ?string
+    {
+        $provider = config('ai.default_tts_provider', 'gemini');
+        $pool = config("ai.tts_providers.{$provider}.voice_pool", []);
+
+        if (empty($pool)) {
+            return null;
+        }
+
+        $castSoFar = Character::query()
+            ->when($story->series_id, fn ($q) => $q->where('series_id', $story->series_id), fn ($q) => $q->where('story_id', $story->id))
+            ->whereNotNull('voice')
+            ->count();
+
+        return $pool[$castSoFar % count($pool)];
+    }
+
     protected function reconcileAssets(string $modelClass, array $entries, Story $story, Collection $existing): \Illuminate\Support\Collection
     {
         $byName = $existing->keyBy(fn ($a) => Str::lower($a->name));
@@ -170,13 +205,23 @@ class ImageGeneratorService
                     $asset->update(['image_prompt' => $entry['image_prompt'] ?? null]);
                 }
             } else {
-                $asset = $modelClass::create([
+                $attributes = [
                     'story_id' => $story->id,
                     'series_id' => $story->series_id,
                     'user_id' => $story->user_id,
                     'name' => $name,
                     'image_prompt' => $entry['image_prompt'] ?? null,
-                ]);
+                ];
+
+                // Cast a voice for every new speaking character so dialogue
+                // (see ImagePromptAgent rule 6 / NarrationAudioService) has
+                // something distinct to synthesize with immediately,
+                // without needing an admin to assign one by hand first.
+                if ($modelClass === Character::class) {
+                    $attributes['voice'] = $this->pickVoiceForNewCharacter($story);
+                }
+
+                $asset = $modelClass::create($attributes);
             }
 
             $byName->put($key, $asset);

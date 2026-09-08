@@ -161,7 +161,26 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           would hold on screen (roughly 1-3 sentences per scene).
         - Never break narration across scenes mid-sentence — each scene's
           narration should be a complete thought on its own.
-        6. Caption selectivity — NOT every scene should have a caption.
+        6. Dialogue — a scene may ALSO carry a "dialogue" array when the
+           story's own beat is written as (or clearly implies) characters
+           actually talking to each other, rather than being told about
+           through narration.
+        - Use dialogue sparingly and only where it earns its place: a
+          confrontation, a confession, a quick exchange that reveals
+          character — not for scenes that are better served by narration
+          alone. Most scenes should have EMPTY dialogue.
+        - When used, dialogue is 2-6 short lines, alternating speakers
+          naturally the way people actually talk (not one long monologue
+          per character). Every speaker named in dialogue MUST also appear
+          in that scene's character_names.
+        - narration is still REQUIRED even on a scene with dialogue — keep
+          it short in that case (a single scene-setting clause, e.g. "The
+          two of them stood in the doorway, neither willing to look away
+          first.") since the dialogue lines carry the actual spoken audio
+          for that scene, not the narration.
+        - Leave dialogue as an empty array for every scene that doesn't
+          call for it — do not invent exchanges just to use the feature.
+        7. Caption selectivity — NOT every scene should have a caption.
         - Set "caption" to null for scenes that are strong purely as an
           image (a striking expression, an establishing shot, a beautiful
           wide shot) — text would clutter these.
@@ -218,8 +237,14 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           (only names from the "props" array — omit if none).
         - narration: the voiceover script line for this scene, following
           rule 5 above. Required, never null or empty.
+        - dialogue: array, following rule 6 above. Empty for most scenes.
+          Each entry: {character_name, text} — character_name MUST be one
+          of this scene's character_names, text is that one line only
+          (no quotation marks, no speaker label baked into the text
+          itself — that's handled separately when it's turned into
+          on-screen captions).
         - caption: nullable. A short, punchy line (6-14 words) in the voice
-          of the story, following rule 6 above. No hashtags, no emoji, no
+          of the story, following rule 7 above. No hashtags, no emoji, no
           quotation marks — just the line itself, or null.
         - pinterest_title: punchy, scroll-stopping title (under 100 chars)
           that complements (doesn't repeat) the caption.
@@ -268,6 +293,14 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                         'environment_names' => $s->array()->items($s->string())->nullable(),
                         'prop_names' => $s->array()->items($s->string())->nullable(),
                         'narration' => $s->string()->required(),
+                        'dialogue' => $s->array()
+                            ->items(
+                                $schema->object(fn (JsonSchema $line) => [
+                                    'character_name' => $line->string()->required(),
+                                    'text' => $line->string()->required(),
+                                ])
+                            )
+                            ->nullable(),
                         'caption' => $s->string()->nullable(),
                         'pinterest_title' => $s->string()->required(),
                         'pinterest_description' => $s->string()->required(),

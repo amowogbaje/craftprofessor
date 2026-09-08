@@ -31,16 +31,18 @@ class ElevenLabsTtsProvider implements TtsProviderContract
         return 'mp3';
     }
 
-    public function speak(string $text): string
+    public function speak(string $text, ?string $voice = null): string
     {
-        if (empty($this->apiKey) || empty($this->voiceId)) {
+        $voiceId = $voice ?: $this->voiceId;
+
+        if (empty($this->apiKey) || empty($voiceId)) {
             throw new \RuntimeException('ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID are not configured.');
         }
 
         try {
             $response = Http::withHeaders(['xi-api-key' => $this->apiKey])
                 ->timeout(60)
-                ->post("{$this->baseUrl}/text-to-speech/{$this->voiceId}", [
+                ->post("{$this->baseUrl}/text-to-speech/{$voiceId}", [
                     'text' => $text,
                     'model_id' => $this->model,
                 ])

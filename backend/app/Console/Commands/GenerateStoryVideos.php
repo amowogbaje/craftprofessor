@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Exceptions\InsufficientCoinsException;
 use App\Exceptions\UserGenerationLimitReached;
 use App\Models\StoryImagePrompt;
-use App\Models\Video;
 use App\Services\SceneVideoGenerationService;
 use App\Services\VideoGeneratorService;
 use Illuminate\Console\Command;
@@ -63,11 +62,18 @@ class GenerateStoryVideos extends Command
                 return self::FAILURE;
             }
 
-            if ($this->option('force') && $scene->videoPrompt) {
+            if ($this->option('force')) {
                 $this->line("Clearing previous video attempt for scene #{$scene->id}...");
-                Video::where('video_prompt_id', $scene->videoPrompt->id)->delete();
-                $scene->videoPrompt->delete();
+                $scene->clearVideoAttempt(evenIfCompleted: true);
                 $scene->refresh();
+            } elseif ($scene->hasCompletedVideo()) {
+                $this->warn("Scene #{$scene->id} already has a completed video — pass --force to regenerate.");
+                return self::SUCCESS;
+            } else {
+                // Stale/failed attempt, if any (see StoryImagePrompt::clearVideoAttempt) — clear
+                // it automatically so this isn't blocked by the same "already requested" state
+                // VideoController::store() used to get stuck on.
+                $scene->clearVideoAttempt();
             }
 
             $this->processScene($scene, $generator, $videoService);
@@ -97,15 +103,17 @@ class GenerateStoryVideos extends Command
     }
 
     /**
-     * Oldest scene with an image but no video attempt yet (whether that
-     * attempt succeeded or failed — same "already requested" rule the API
-     * endpoint uses, see VideoController::store), excluding users already
-     * blocked this run and optionally filtered to --user.
+     * Oldest scene with an image but no *completed* video yet — a scene
+     * whose only video attempt failed (see
+     * StoryImagePrompt::hasCompletedVideo()) is eligible again, not stuck
+     * behind a stale VideoPrompt/Video row the way this used to work.
+     * Excludes users already blocked this run and optionally filtered to
+     * --user.
      */
     protected function nextEligibleScene(): ?StoryImagePrompt
     {
         return StoryImagePrompt::whereNotNull('image_generated_url')
-            ->whereDoesntHave('videoPrompt')
+            ->whereDoesntHave('video', fn ($q) => $q->whereNotNull('video_url'))
             ->when($this->option('user'), fn ($q, $userId) => $q->where('user_id', $userId))
             ->when($this->blockedUserIds->isNotEmpty(), fn ($q) => $q->whereNotIn('user_id', $this->blockedUserIds->unique()))
             ->oldest('id')
@@ -134,10 +142,14 @@ class GenerateStoryVideos extends Command
             return false;
         }
 
-        if ($scene->videoPrompt()->exists()) {
-            $this->warn('  A video has already been requested for this scene.');
+        if ($scene->hasCompletedVideo()) {
+            $this->warn('  A video has already been generated for this scene.');
             return false;
         }
+
+        // Stale/failed attempt, if any — clear it so this scene isn't
+        // permanently stuck behind it (see StoryImagePrompt::clearVideoAttempt).
+        $scene->clearVideoAttempt();
 
         $this->line("  Generating via SceneVideoGenerationService (provider: {$videoService->providerName()})...");
 

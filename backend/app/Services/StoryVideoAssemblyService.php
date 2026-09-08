@@ -37,17 +37,19 @@ use RuntimeException;
  * duration matches its narration audio's duration, concatenating the two
  * tracks independently keeps them in sync without a timeline/overlay step.
  *
- * DIALOGUE, LATER: everything here is written around "one line of text
- * plus one audio file per scene" (narration) rather than "one array of
- * caption beats" because that's genuinely all we have today. The
- * extension point when dialogue lands is buildLineSegments() and the loop
- * in buildSceneClip() — a scene would hand over multiple {speaker, text,
- * audio_url, duration} lines instead of one narration blob, each
- * contributing its own caption beats (labeled "ALICE: ..." etc.), and the
- * per-line audio clips would concatenate the same way narration audio
- * does now. Nothing about the visual/caption pipeline below assumes
- * single-speaker narration except the one call site that reads
- * `$scene->narration`.
+ * DIALOGUE: a scene can carry multi-speaker dialogue instead of plain
+ * narration (StoryImagePrompt::dialogue_lines — see ImagePromptAgent rule
+ * 6 and NarrationAudioService::generateDialogue()). buildSceneClip()
+ * branches on StoryImagePrompt::hasDialogue() to call
+ * buildDialogueSegments() instead of buildLineSegments(): each dialogue
+ * line becomes its own "NAME: text" caption card timed to that line's own
+ * measured audio duration, rather than one narration blob split by word
+ * count. Visually nothing changes either way — dialogue and narration
+ * scenes both resolve to a single $duration and a single concatenated
+ * audio track by the time buildRawVisual()/the outer assemble() loop see
+ * them, since NarrationAudioService concatenates a scene's dialogue lines
+ * into one audio file (narration_audio_url/_seconds) before this class
+ * ever runs.
  *
  * VERIFIED: the zoompan `s=` option needs `WxH` syntax specifically (not
  * the `W:H` the `scale=`/`pad=` filters use) — an easy mismatch, actually
@@ -173,7 +175,9 @@ class StoryVideoAssemblyService
     {
         $rawPath = $this->buildRawVisual($scene, $duration, $workDir, $index);
 
-        $segments = $this->buildLineSegments($scene->narration ?? '', $duration);
+        $segments = $scene->hasDialogue()
+            ? $this->buildDialogueSegments($scene->dialogue_lines, $duration)
+            : $this->buildLineSegments($scene->narration ?? '', $duration);
 
         if (empty($segments)) {
             return $rawPath; // no narration text yet — nothing to caption
@@ -297,11 +301,9 @@ class StoryVideoAssemblyService
      * by sentence means a caption card never stops mid-thought the way a
      * fixed ~5s window could.
      *
-     * DIALOGUE extension point: this takes one (text, duration) pair
-     * today because that's one narration line. Multi-speaker dialogue
-     * would call this once per line (each with its own duration from its
-     * own audio clip) and merge the resulting segment arrays in order,
-     * optionally prefixing each line's segments with "SPEAKER: ".
+     * Used for plain-narration scenes. See buildDialogueSegments() below
+     * for the multi-speaker-dialogue counterpart, which times each line
+     * against its own real audio duration instead of a word-count guess.
      *
      * @return array<int, array{start: float, duration: float, text: string}>
      */
@@ -349,6 +351,57 @@ class StoryVideoAssemblyService
         }
 
         return $segments;
+    }
+
+    /**
+     * Dialogue counterpart to buildLineSegments() above — one caption card
+     * per dialogue line, labeled "NAME: text", timed to that line's own
+     * measured audio_seconds (set by NarrationAudioService when it
+     * generates each line's TTS clip) rather than a word-count guess,
+     * since a real per-line duration already exists here unlike plain
+     * narration's single blob of audio. Falls back to splitting
+     * $totalDuration evenly across lines only if narration audio hasn't
+     * been generated for this scene yet (so there's nothing to time
+     * against) — same "caption what we can, even before audio exists"
+     * approach buildLineSegments() takes.
+     *
+     * @param array<int, array{character_name: string, text: string, audio_seconds?: float|null}> $lines
+     * @return array<int, array{start: float, duration: float, text: string}>
+     */
+    protected function buildDialogueSegments(array $lines, float $totalDuration): array
+    {
+        if (empty($lines) || $totalDuration <= 0) {
+            return [];
+        }
+
+        $hasAllDurations = collect($lines)->every(fn ($l) => !empty($l['audio_seconds']));
+        $segments = [];
+        $elapsed = 0.0;
+
+        foreach ($lines as $line) {
+            $lineDuration = $hasAllDurations
+                ? (float) $line['audio_seconds']
+                : $totalDuration / count($lines);
+
+            $segments[] = [
+                'start' => $elapsed,
+                'duration' => $lineDuration,
+                'text' => $this->formatDialogueLine($line),
+            ];
+
+            $elapsed += $lineDuration;
+        }
+
+        return $segments;
+    }
+
+    /** "ALICE: Wait — did you hear that?" — null-safe against a missing character_name. */
+    protected function formatDialogueLine(array $line): string
+    {
+        $name = Str::upper(trim($line['character_name'] ?? ''));
+        $text = $line['text'] ?? '';
+
+        return $name !== '' ? "{$name}: {$text}" : $text;
     }
 
     /** @param array<int, array{start: float, duration: float, text: string}> $segments */

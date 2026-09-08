@@ -7,7 +7,6 @@ use App\Exceptions\UserGenerationLimitReached;
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateVideoJob;
 use App\Models\StoryImagePrompt;
-use App\Models\Video;
 use App\Services\SceneVideoGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,7 +34,16 @@ class VideoController extends Controller
         $user = $request->user();
         abort_if($imagePrompt->user_id !== $user->id, 403, 'Not your image.');
         abort_if(empty($imagePrompt->image_generated_url), 422, 'Image has not been generated yet.');
-        abort_if($imagePrompt->videoPrompt()->exists(), 422, 'A video has already been requested for this image — use the regenerate endpoint instead.');
+        abort_if($imagePrompt->hasCompletedVideo(), 422, 'A video has already been generated for this image — use the regenerate endpoint instead.');
+
+        // A previous attempt may exist without ever having finished (the
+        // motion-prompt step or the provider call itself failed) — that
+        // used to leave this scene stuck behind the guard above forever,
+        // since a VideoPrompt row existing (whether it succeeded or not)
+        // was being treated as "already requested." Clear it automatically
+        // so a plain retry here just works, no need to know about
+        // /regenerate for something that never actually succeeded.
+        $imagePrompt->clearVideoAttempt();
 
         return $this->dispatchOrRunSync($imagePrompt, $user, $generator, 'Video generation queued. This can take a few minutes.');
     }
@@ -54,12 +62,7 @@ class VideoController extends Controller
         abort_if($imagePrompt->user_id !== $user->id, 403, 'Not your image.');
         abort_if(empty($imagePrompt->image_generated_url), 422, 'Image has not been generated yet.');
 
-        $existingPrompt = $imagePrompt->videoPrompt;
-
-        if ($existingPrompt) {
-            Video::where('video_prompt_id', $existingPrompt->id)->delete();
-            $existingPrompt->delete();
-        }
+        $imagePrompt->clearVideoAttempt(evenIfCompleted: true);
 
         return $this->dispatchOrRunSync($imagePrompt->refresh(), $user, $generator, 'Previous video cleared — regeneration queued.');
     }

@@ -34,6 +34,7 @@ class Character extends Model
         'name',
         'img_url',
         'img_url_quality',
+        'voice',
         'image_prompt',
         'generated_at',
         'last_generation_error',

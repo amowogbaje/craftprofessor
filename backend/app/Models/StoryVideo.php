@@ -29,6 +29,12 @@ class StoryVideo extends Model
         'pinterest_posted_at',
         'pinterest_pin_id',
         'last_pinterest_error',
+        'posted_to_youtube',
+        'youtube_posted_at',
+        'youtube_video_id',
+        'last_youtube_error',
+        'shorts_video_url',
+        'shorts_duration_seconds',
     ];
 
     protected $casts = [
@@ -36,6 +42,9 @@ class StoryVideo extends Model
         'duration_seconds' => 'float',
         'posted_to_pinterest' => 'boolean',
         'pinterest_posted_at' => 'datetime',
+        'posted_to_youtube' => 'boolean',
+        'youtube_posted_at' => 'datetime',
+        'shorts_duration_seconds' => 'float',
     ];
 
     public function story(): BelongsTo
