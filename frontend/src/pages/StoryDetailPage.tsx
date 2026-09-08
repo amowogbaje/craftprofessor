@@ -1,14 +1,18 @@
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, RotateCcw, Users, Clapperboard, MapPin, Package, ArrowRight } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { useState } from 'react'
+import { Loader2, RotateCcw, Users, Clapperboard, MapPin, Package, ArrowRight, Pin } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { fetchStoryDetail, regenerateVideo, requestVideo } from '@/lib/api-content'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { fetchStoryDetail, regenerateVideo, requestVideo, updateStoryPinterestSettings } from '@/lib/api-content'
 import { apiErrorMessage } from '@/lib/http'
 import { useToast } from '@/components/ui/use-toast'
 import { StoryVideoAction } from '@/components/stories/StoryVideoAction'
-import type { Character, CharacterScene } from '@/lib/types'
+import type { Character, CharacterScene, Story } from '@/lib/types'
 
 function AssetStrip({ title, icon: Icon, assets, linkTo }: {
   title: string
@@ -58,6 +62,117 @@ function AssetStrip({ title, icon: Icon, assets, linkTo }: {
         })}
       </div>
     </div>
+  )
+}
+
+function StoryPinterestSettings({
+  story,
+  boards,
+  storySlug,
+}: {
+  story: Story
+  boards: { id: number; name: string }[]
+  storySlug: string
+}) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['stories', storySlug] })
+
+  // 'account-default' is a sentinel for "no override" (null on the
+  // backend) — Radix Select can't bind an item value to an empty string.
+  const [boardValue, setBoardValue] = useState(
+    story.pinterest_board_id ? String(story.pinterest_board_id) : 'account-default',
+  )
+  const [dailyLimit, setDailyLimit] = useState(story.pinterest_daily_pin_limit?.toString() ?? '')
+
+  const boardMutation = useMutation({
+    mutationFn: (value: string) =>
+      updateStoryPinterestSettings(story.id, {
+        pinterest_board_id: value === 'account-default' ? null : Number(value),
+      }),
+    onSuccess: () => {
+      invalidate()
+      toast({ title: 'Pinterest board updated' })
+    },
+    onError: (err) => {
+      setBoardValue(story.pinterest_board_id ? String(story.pinterest_board_id) : 'account-default')
+      toast({ title: 'Could not save', description: apiErrorMessage(err), variant: 'destructive' })
+    },
+  })
+
+  const limitMutation = useMutation({
+    mutationFn: (value: string) =>
+      updateStoryPinterestSettings(story.id, {
+        pinterest_daily_pin_limit: value === '' ? null : Number(value),
+      }),
+    onSuccess: () => {
+      invalidate()
+      toast({ title: 'Daily pin limit updated' })
+    },
+    onError: (err) => {
+      setDailyLimit(story.pinterest_daily_pin_limit?.toString() ?? '')
+      toast({ title: 'Could not save', description: apiErrorMessage(err), variant: 'destructive' })
+    },
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Pin className="h-4 w-4" /> Pinterest for this story
+        </CardTitle>
+        <CardDescription>
+          Leave these unset to use whatever's chosen on your{' '}
+          <Link to="/settings/pinterest-boards" className="underline underline-offset-2">
+            Pinterest boards
+          </Link>{' '}
+          setup — these only override it for this story specifically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="story-pinterest-board">Board</Label>
+          <Select
+            value={boardValue}
+            disabled={boardMutation.isPending}
+            onValueChange={(value) => {
+              setBoardValue(value)
+              boardMutation.mutate(value)
+            }}
+          >
+            <SelectTrigger id="story-pinterest-board">
+              <SelectValue placeholder="Account default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="account-default">Account default</SelectItem>
+              {boards.map((board) => (
+                <SelectItem key={board.id} value={String(board.id)}>
+                  {board.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="story-pinterest-limit">Pins per day</Label>
+          <Input
+            id="story-pinterest-limit"
+            type="number"
+            min={0}
+            max={100}
+            placeholder="Account default"
+            disabled={limitMutation.isPending}
+            value={dailyLimit}
+            onChange={(e) => setDailyLimit(e.target.value)}
+            onBlur={() => {
+              if (dailyLimit !== (story.pinterest_daily_pin_limit?.toString() ?? '')) {
+                limitMutation.mutate(dailyLimit)
+              }
+            }}
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -122,7 +237,7 @@ export function StoryDetailPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>
   }
 
-  const { data: story, characters, environments, props, characters_scope: charactersScope, characters_path: charactersPath } = query.data
+  const { data: story, characters, environments, props, characters_scope: charactersScope, characters_path: charactersPath, pinterest_boards: pinterestBoards } = query.data
   const scenes = story.image_prompts ?? []
   const isEpisode = charactersScope === 'series' && !!story.series
 
@@ -137,6 +252,8 @@ export function StoryDetailPage() {
         </div>
         <StoryVideoAction story={story} />
       </div>
+
+      <StoryPinterestSettings story={story} boards={pinterestBoards} storySlug={slug!} />
 
       {isEpisode ? (
         // Episodes share their character/environment/prop pool with every

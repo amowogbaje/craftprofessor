@@ -12,10 +12,17 @@ use Illuminate\Support\Str;
 
 /**
  * Scheduler 3 — posts at most one image per invocation (to up to 3 boards
- * — see PinterestPlatform::publishToBoards()), and enforces a hard
- * per-user daily cap (services.pinterest.max_pins_per_user_per_day,
- * default 5) itself rather than relying solely on how often it's
- * scheduled.
+ * — see PinterestPlatform::publishToBoards()), enforcing a daily pin cap
+ * per (user, story) rather than per user alone.
+ *
+ * Per-story, not per-user, because a story can set its own
+ * pinterest_daily_pin_limit (Story::effectivePinterestDailyPinLimit()) —
+ * a user running several stories can give one a faster daily cadence than
+ * another, and each story's budget is tracked completely independently:
+ * story A hitting its cap for the day never blocks story B's pins, even
+ * for the same user. A story with no override just uses the account-wide
+ * default (services.pinterest.max_pins_per_user_per_day), which is what
+ * every story effectively had before this override existed.
  *
  * The cap counts actual PINS (rows in social_posts, platform=pinterest,
  * status=posted) rather than images — since one image can now produce up
@@ -24,11 +31,11 @@ use Illuminate\Support\Str;
  *
  * Why the scheduling-frequency note still matters: routes/console.php
  * fires this command roughly every 5 minutes across two overnight windows
- * — up to ~48 invocations/day. Each run skips any user who has already
- * hit their cap for "today" (in services.pinterest.daily_cap_timezone)
- * and posts the oldest still-eligible image belonging to a user under
- * cap. If every user with a ready image has hit their cap, the run does
- * nothing.
+ * — up to ~48 invocations/day. Each run skips any (user, story) pair that
+ * has already hit that story's cap for "today" (in
+ * services.pinterest.daily_cap_timezone) and posts the oldest still-
+ * eligible image belonging to a story under its own cap. If every story
+ * with a ready image has hit its cap, the run does nothing.
  *
  * Posts through the *owning* user's own connected Pinterest account
  * (SocialPlatformManager::forUser()) rather than a single global/static
@@ -39,20 +46,21 @@ use Illuminate\Support\Str;
 class PostPinterestPins extends Command
 {
     protected $signature = 'story:post-pinterest-pin';
-    protected $description = 'Post the next ready image as Pinterest pin(s) (up to 3 boards), respecting the per-user daily pin cap.';
+    protected $description = 'Post the next ready image as Pinterest pin(s) (up to 3 boards), respecting each story\'s own daily pin cap.';
 
     /** How many oldest-ready candidates to consider before giving up for this run. */
     private const CANDIDATE_BATCH_SIZE = 100;
 
     public function handle(SocialPlatformManager $platforms): int
     {
-        $cap = (int) config('services.pinterest.max_pins_per_user_per_day', 5);
+        $defaultCap = (int) config('services.pinterest.max_pins_per_user_per_day', 5);
         $timezone = config('services.pinterest.daily_cap_timezone', 'UTC');
 
         $startOfDay = now($timezone)->startOfDay();
         $endOfDay = $startOfDay->copy()->endOfDay();
 
         $candidates = StoryImagePrompt::awaitingPinterestPost()
+            ->with('story:id,pinterest_daily_pin_limit')
             ->oldest('generated_at')
             ->limit(self::CANDIDATE_BATCH_SIZE)
             ->get();
@@ -62,34 +70,40 @@ class PostPinterestPins extends Command
             return self::SUCCESS;
         }
 
-        $userIds = $candidates->pluck('user_id')->filter()->unique()->values();
+        $storyIds = $candidates->pluck('story_id')->filter()->unique()->values();
 
         // One aggregate query for how many PINS (not images — a single
-        // image can produce up to 3) each of these users has already
-        // posted today.
-        $postedTodayByUser = SocialPost::query()
-            ->where('platform', 'pinterest')
-            ->where('status', 'posted')
-            ->whereIn('user_id', $userIds)
-            ->whereBetween('posted_at', [
+        // image can produce up to 3) have already been posted today,
+        // per (user, story) pair — not just per user, so each story's
+        // budget is tracked independently.
+        $postedTodayByStory = SocialPost::query()
+            ->join('story_image_prompts', 'story_image_prompts.id', '=', 'social_posts.story_image_prompt_id')
+            ->where('social_posts.platform', 'pinterest')
+            ->where('social_posts.status', 'posted')
+            ->whereIn('story_image_prompts.story_id', $storyIds)
+            ->whereBetween('social_posts.posted_at', [
                 $startOfDay->clone()->utc(),
                 $endOfDay->clone()->utc(),
             ])
-            ->selectRaw('user_id, count(*) as total')
-            ->groupBy('user_id')
-            ->pluck('total', 'user_id');
+            ->selectRaw('story_image_prompts.story_id, count(*) as total')
+            ->groupBy('story_image_prompts.story_id')
+            ->pluck('total', 'story_id');
+
+        $effectiveCap = fn (StoryImagePrompt $prompt) => $prompt->story?->effectivePinterestDailyPinLimit() ?? $defaultCap;
 
         $next = $candidates->first(
-            fn (StoryImagePrompt $prompt) => ($postedTodayByUser[$prompt->user_id] ?? 0) < $cap
+            fn (StoryImagePrompt $prompt) => !$prompt->story_id
+                || ($postedTodayByStory[$prompt->story_id] ?? 0) < $effectiveCap($prompt)
         );
 
         if (!$next) {
-            $this->info("Every user with a ready image has already hit today's Pinterest cap ({$cap} pins/day). Nothing to post this run.");
+            $this->info("Every story with a ready image has already hit its own Pinterest cap for today. Nothing to post this run.");
             return self::SUCCESS;
         }
 
-        $alreadyPostedToday = $postedTodayByUser[$next->user_id] ?? 0;
-        $this->info("Posting prompt #{$next->id} to Pinterest (user #{$next->user_id}, {$alreadyPostedToday}/{$cap} pins posted today so far).");
+        $cap = $effectiveCap($next);
+        $alreadyPostedToday = $postedTodayByStory[$next->story_id] ?? 0;
+        $this->info("Posting prompt #{$next->id} to Pinterest (user #{$next->user_id}, story #{$next->story_id}, {$alreadyPostedToday}/{$cap} pins posted for this story today so far).");
 
         try {
             /** @var PinterestPlatform $pinterest */

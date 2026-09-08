@@ -24,6 +24,12 @@ class PinterestBoardSelectionService
     /** @return Collection<int, PinterestBoard> */
     public function resolve(StoryImagePrompt $imagePrompt, SocialAccount $account): Collection
     {
+        $storyBoard = $this->resolveStoryOverride($imagePrompt);
+
+        if ($storyBoard) {
+            return collect([$storyBoard]);
+        }
+
         if (!$account->isDynamicBoardPosting()) {
             $fixed = $account->preferredBoards()->active()->limit(self::MAX_BOARDS_PER_PIN)->get();
 
@@ -40,6 +46,24 @@ class PinterestBoardSelectionService
 
         return $this->resolveDynamically($imagePrompt, $account);
     }
+
+    /**
+     * A story can pin a specific board for everything it posts
+     * (Story::pinterest_board_id) instead of following the account's
+     * fixed/dynamic setup — this is what makes that override take effect.
+     * Only used when the story's chosen board is still active; a
+     * deactivated board (PinterestBoard::is_active = false) is treated
+     * the same as "no override chosen," falling through to the account
+     * default below, rather than silently pinning to a board the user
+     * retired.
+     */
+    protected function resolveStoryOverride(StoryImagePrompt $imagePrompt): ?PinterestBoard
+    {
+        $board = $imagePrompt->story?->pinterestBoard;
+
+        return ($board && $board->is_active) ? $board : null;
+    }
+
 
     /** @return Collection<int, PinterestBoard> */
     protected function resolveDynamically(StoryImagePrompt $imagePrompt, SocialAccount $account): Collection

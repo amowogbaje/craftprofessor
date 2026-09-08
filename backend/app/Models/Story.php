@@ -16,6 +16,8 @@ class Story extends Model
     protected $fillable = [
         'user_id',
         'series_id',
+        'pinterest_board_id',
+        'pinterest_daily_pin_limit',
         'episode_number',
         'title',
         'slug',
@@ -72,6 +74,32 @@ class Story extends Model
     public function series(): BelongsTo
     {
         return $this->belongsTo(StorySeries::class, 'series_id');
+    }
+
+    /**
+     * This story's dedicated Pinterest board override, if any — see the
+     * migration adding pinterest_board_id for why this lives on Story
+     * rather than StorySeries. Null means "no override," which is the
+     * default for every story: PinterestBoardSelectionService then falls
+     * back to whatever was chosen on the socials Pinterest setup page
+     * (SocialAccount::board_posting_mode), exactly as it worked before
+     * this override existed.
+     */
+    public function pinterestBoard(): BelongsTo
+    {
+        return $this->belongsTo(PinterestBoard::class);
+    }
+
+    /**
+     * This story's own daily Pinterest pin budget, if set — see
+     * PostPinterestPins for how this gets enforced independently per
+     * story rather than only per user. Null means this story shares in
+     * the account-wide default (services.pinterest.max_pins_per_user_per_day).
+     */
+    public function effectivePinterestDailyPinLimit(): int
+    {
+        return $this->pinterest_daily_pin_limit
+            ?? (int) config('services.pinterest.max_pins_per_user_per_day', 5);
     }
 
     /** Characters first introduced in this specific story (origin, not full ownership). */

@@ -80,6 +80,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/stories', [StoryController::class, 'store']);
     Route::get('/stories', [StoryController::class, 'index']);
     Route::get('/stories/{story:slug}', [StoryController::class, 'show']);
+    Route::put('/stories/{story}', [StoryController::class, 'update']);
 
     // Characters — list scoped to a story or series, plus one character's
     // own generated scenes/videos. See CharacterController for the

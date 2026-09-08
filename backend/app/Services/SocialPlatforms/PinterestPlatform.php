@@ -84,21 +84,27 @@ class PinterestPlatform extends AbstractSocialPlatform implements PublishesImage
     /**
      * The assembled, narrated-and-captioned StoryVideo (see
      * StoryVideoAssemblyService) — deliberately never a raw per-scene
-     * clip, always the finished "mixed copy." Posted to this account's
-     * single best-guess board, same simpler semantics as publishRawVideo()
-     * rather than publishToBoards()'s multi-board fan-out — a story video
-     * is a one-off flagship post per story, not recurring content that
-     * benefits from spreading across boards.
+     * clip, always the finished "mixed copy." Posted to a single board,
+     * same simpler semantics as publishRawVideo()'s rather than
+     * publishToBoards()'s multi-board fan-out — a story video is a
+     * one-off flagship post per story, not recurring content that
+     * benefits from spreading across boards. Board choice checks the
+     * story's own pinterest_board_id override first (same override
+     * PinterestBoardSelectionService applies to this story's per-scene
+     * pins), then falls back to the account's single default board
+     * exactly as before that override existed.
      *
      * Title/description/link/cover image come from the story's first
      * scene (its hook) since there's no story-level pinterest_* field of
-     * its own.
+     * its own for those.
      */
     public function publishStoryVideo(StoryVideo $storyVideo): SocialPostResult
     {
         try {
             $pinterest = PinterestService::forAccount($this->account);
-            $boardId = $this->account->board_id ?? $pinterest->getLastBoardId();
+            $boardId = $storyVideo->story?->pinterestBoard?->external_board_id
+                ?? $this->account->board_id
+                ?? $pinterest->getLastBoardId();
 
             $firstScene = $storyVideo->story->imagePrompts()->ordered()->first();
             $title = $firstScene?->pinterest_title ?: ($storyVideo->story->title ?: 'A story');

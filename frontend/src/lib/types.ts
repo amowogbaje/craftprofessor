@@ -135,12 +135,16 @@ export interface StoryDetailResponse {
   props: Character[]
   characters_scope: 'story' | 'series'
   characters_path: string
+  pinterest_boards: { id: number; name: string }[]
 }
 
 export interface Story {
   id: number
   user_id: number
   series_id: number | null
+  pinterest_board_id: number | null
+  pinterest_daily_pin_limit: number | null
+  pinterest_board?: { id: number; name: string; is_active: boolean } | null
   episode_number: number | null
   title?: string | null
   slug: string

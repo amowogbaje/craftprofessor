@@ -105,6 +105,14 @@ export async function fetchStoryDetail(storySlug: string) {
   return data
 }
 
+export async function updateStoryPinterestSettings(
+  storyId: number,
+  payload: { pinterest_board_id?: number | null; pinterest_daily_pin_limit?: number | null },
+) {
+  const { data } = await api.put<{ message: string; story: Story }>(`/stories/${storyId}`, payload)
+  return data.story
+}
+
 export async function fetchStoryCharacters(storySlug: string) {
   const { data } = await api.get<CharactersResponse>(`/stories/${storySlug}/characters`)
   return data
