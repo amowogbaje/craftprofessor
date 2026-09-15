@@ -20,6 +20,17 @@ use Laravel\Ai\Promptable;
  * Story context is bound via the constructor (like a one-shot report, not a
  * conversation), so instructions() carries the full brief and prompt() is
  * just the trigger.
+ *
+ * SCHEMA NOTE: Gemini's structured-output validator (response_json_schema)
+ * rejects requests outright — with a bare INVALID_ARGUMENT and no field-level
+ * detail — when the schema gets too "complex." Two known triggers we hit:
+ *   1. minItems/maxItems on the top-level "prompts" array.
+ *   2. Union-with-null on array/object types (e.g. type: ["array","null"]).
+ * Both are avoided in schema() below. Scene-count bounds (MIN_SCENES/
+ * MAX_SCENES) are enforced in PHP after the response comes back instead
+ * (see ImageGeneratorService::generatePromptsForStory). The one nullable
+ * field left, "caption", uses type: ["string","null"], which is the union
+ * shape confirmed to work against the live API.
  */
 class ImagePromptAgent implements Agent, HasStructuredOutput
 {
@@ -30,6 +41,9 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
      * The model decides the actual count within this range based on the
      * story's real beats — short stories get fewer scenes, long/eventful
      * ones get more, instead of every story being forced into exactly 10.
+     *
+     * Enforced in PHP (ImageGeneratorService), NOT in the JSON schema —
+     * see the SCHEMA NOTE above for why.
      */
     public const MIN_SCENES = 4;
     public const MAX_SCENES = 20;
@@ -121,10 +135,12 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           new action, a shift in emotion or stakes) should get its own
           scene, in story order.
         - Produce no fewer than {$minScenes} and no more than {$maxScenes}
-          scenes. A short, simple story should land near the low end; a
-          long or eventful one should land near the high end. Don't pad to
-          hit a higher number, and don't compress distinct beats together
-          just to hit a lower one.
+          scenes — this is a hard requirement, not a suggestion, since
+          anything outside this range will be rejected after generation. A
+          short, simple story should land near the low end; a long or
+          eventful one should land near the high end. Don't pad to hit a
+          higher number, and don't compress distinct beats together just to
+          hit a lower one.
 
         INSTRUCTION RULES:
         1. Produce a "characters" array for every character appearing in any scene prompt.
@@ -168,7 +184,7 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
         - Use dialogue sparingly and only where it earns its place: a
           confrontation, a confession, a quick exchange that reveals
           character — not for scenes that are better served by narration
-          alone. Most scenes should have EMPTY dialogue.
+          alone. Most scenes should have an EMPTY dialogue array.
         - When used, dialogue is 2-6 short lines, alternating speakers
           naturally the way people actually talk (not one long monologue
           per character). Every speaker named in dialogue MUST also appear
@@ -178,8 +194,9 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           two of them stood in the doorway, neither willing to look away
           first.") since the dialogue lines carry the actual spoken audio
           for that scene, not the narration.
-        - Leave dialogue as an empty array for every scene that doesn't
-          call for it — do not invent exchanges just to use the feature.
+        - dialogue is ALWAYS an array, never null. Use an empty array []
+          for every scene that doesn't call for dialogue — do not invent
+          exchanges just to use the feature.
         7. Caption selectivity — NOT every scene should have a caption.
         - Set "caption" to null for scenes that are strong purely as an
           image (a striking expression, an establishing shot, a beautiful
@@ -229,20 +246,24 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
           camera framing/lighting for that specific shot. When the scene
           takes place in a tracked environment or features a tracked prop,
           reference it consistently with how it was described.
-        - character_names: array of character name strings appearing in the scene.
+        - character_names: array of character name strings appearing in the
+          scene. Use an empty array if none.
         - environment_names: array of environment name strings this scene
-          takes place in (only names from the "environments" array — omit
-          entirely for scenes in a one-off, untracked location).
+          takes place in (only names from the "environments" array). Use an
+          empty array, never null, for scenes in a one-off, untracked
+          location.
         - prop_names: array of prop name strings featured in the scene
-          (only names from the "props" array — omit if none).
+          (only names from the "props" array). Use an empty array, never
+          null, if none.
         - narration: the voiceover script line for this scene, following
           rule 5 above. Required, never null or empty.
-        - dialogue: array, following rule 6 above. Empty for most scenes.
-          Each entry: {character_name, text} — character_name MUST be one
-          of this scene's character_names, text is that one line only
-          (no quotation marks, no speaker label baked into the text
-          itself — that's handled separately when it's turned into
-          on-screen captions).
+        - dialogue: array, following rule 6 above. ALWAYS an array, never
+          null — use [] for scenes without dialogue. Each entry:
+          {character_name, text} — character_name MUST be one of this
+          scene's character_names, text is that one line only (no
+          quotation marks, no speaker label baked into the text itself —
+          that's handled separately when it's turned into on-screen
+          captions).
         - caption: nullable. A short, punchy line (6-14 words) in the voice
           of the story, following rule 7 above. No hashtags, no emoji, no
           quotation marks — just the line itself, or null.
@@ -284,23 +305,34 @@ class ImagePromptAgent implements Agent, HasStructuredOutput
                 )
                 ->required(),
 
+            // NOTE: intentionally no ->min()/->max() here — Gemini's
+            // structured-output validator rejects minItems/maxItems on this
+            // array with a bare, field-less INVALID_ARGUMENT. Scene-count
+            // bounds are enforced in PHP after the response comes back
+            // (see ImageGeneratorService::generatePromptsForStory) and are
+            // stated as a hard requirement in the prompt text instead.
             'prompts' => $schema->array()
-                ->min(self::MIN_SCENES)->max(self::MAX_SCENES)
                 ->items(
                     $schema->object(fn (JsonSchema $s) => [
                         'prompt' => $s->string()->required(),
                         'character_names' => $s->array()->items($s->string())->required(),
-                        'environment_names' => $s->array()->items($s->string())->nullable(),
-                        'prop_names' => $s->array()->items($s->string())->nullable(),
+                        // NOTE: required (not ->nullable()) — Gemini's
+                        // validator is unreliable with type:["array","null"].
+                        // Model is instructed to send [] instead of null.
+                        'environment_names' => $s->array()->items($s->string())->required(),
+                        'prop_names' => $s->array()->items($s->string())->required(),
                         'narration' => $s->string()->required(),
                         'dialogue' => $s->array()
                             ->items(
-                                $schema->object(fn (JsonSchema $line) => [
+                                $s->object(fn (JsonSchema $line) => [
                                     'character_name' => $line->string()->required(),
                                     'text' => $line->string()->required(),
                                 ])
                             )
-                            ->nullable(),
+                            ->required(),
+                        // caption is the one field kept nullable — a
+                        // scalar type:["string","null"] union, which is the
+                        // shape confirmed to work against the live API.
                         'caption' => $s->string()->nullable(),
                         'pinterest_title' => $s->string()->required(),
                         'pinterest_description' => $s->string()->required(),

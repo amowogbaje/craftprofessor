@@ -33,6 +33,7 @@ class StoryImagePrompt extends Model
         'user_id',
         'story_id',
         'prompt',
+        'caption',
         'narration',
         'dialogue_lines',
         'narration_audio_url',
