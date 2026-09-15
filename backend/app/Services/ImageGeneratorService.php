@@ -129,6 +129,13 @@ class ImageGeneratorService
                 'prop_count' => $propsByName->count(),
                 'prompt_count' => count($prompts),
             ]);
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            Log::error('ImagePromptAgent: full Gemini error body', [
+                'story_id' => $story->id,
+                'status' => $e->response->status(),
+                'body' => $e->response->body(), // full, untruncated JSON — this is what you need
+            ]);
+            throw $e;
         } catch (\Throwable $e) {
             if ($user && $debitedAmount > 0) {
                 $this->wallet->refund($user, $debitedAmount, 'image_prompt', $story, ['error' => $e->getMessage()]);
